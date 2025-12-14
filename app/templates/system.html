@@ -1,85 +1,71 @@
 {% extends "base.html" %}
-{% block title %}Система — Server UI{% endblock %}
+{% block title %}Система{% endblock %}
 {% block content %}
-
 <div class="container">
-  <h2>Система</h2>
-
-  <div class="card">
-    <h3>Версия системы</h3>
-    <p>Панель: <strong>{{ info.version }}</strong></p>
-    <p>ОС: {{ info.os }} ({{ info.arch }})</p>
-  </div>
-
-  <div class="card">
-    <h3>Обновления</h3>
-    <p>Текущая: <strong>{{ upd.local_version or info.version }}</strong></p>
-    <p>Доступная: {{ upd.remote_version or "—" }}</p>
-    <p>Проверено: {{ upd.checked_at or "—" }}</p>
-    {% if upd.update_available %}
-      <p class="alert alert-info">Доступна новая версия. Можно применить обновление.</p>
-    {% else %}
-      <p>Обновлений не найдено.</p>
-    {% endif %}
-
-    <div style="display:flex; gap:8px; margin-top:8px;">
-      <button id="check-btn" class="btn">Проверить обновления</button>
-      <button id="apply-btn" class="btn btn-primary" {% if not upd.update_available %}disabled{% endif %}>Обновить</button>
+    <h2>Система</h2>
+    
+    <div class="card">
+        <h3>Версия</h3>
+        <p><strong>Текущая версия:</strong> {{ current_version }}</p>
+        {% if update_available %}
+        <p class="alert alert-info">✨ Доступна новая версия</p>
+        {% endif %}
     </div>
-    <pre id="out" style="display:none; margin-top:10px; background:#f5f5f5; padding:10px; border-radius:4px;"></pre>
-  </div>
 
-  <div class="card">
-    <h3>Информация</h3>
-    <p>Python: {{ info.python }}</p>
-    <p>Docker: {% if docker_present %}доступен{% else %}не найден{% endif %}</p>
-  </div>
-
-  <div class="card">
-    <h3>Сеть</h3>
-    <p>Хост: {{ net.hostname }}</p>
-    {% for ip in net.ips %}
-      <p>{{ ip.iface }} — {{ ip.ip }}</p>
-    {% endfor %}
-  </div>
-
-  <div class="card">
-    <h3>Резервная копия</h3>
-    <p>Скачать архив с базой данных и данными приложений.</p>
-    <a class="btn" href="/system/backup">Скачать backup</a>
-  </div>
+    <div class="card">
+        <h3>Обновления</h3>
+        <button id="check-btn" class="btn">Проверить обновления</button>
+        <button id="update-btn" class="btn btn-primary" {% if not update_available %}disabled{% endif %}>
+            Обновить
+        </button>
+        <pre id="output" style="margin-top: 1rem; background: #f5f5f5; padding: 1rem; border-radius: 4px; display: none;"></pre>
+    </div>
 </div>
 
 <script>
-const out = document.getElementById('out');
-const show = (t) => { out.style.display='block'; out.textContent=t };
+const checkBtn = document.getElementById('check-btn');
+const updateBtn = document.getElementById('update-btn');
+const output = document.getElementById('output');
 
-document.getElementById('check-btn').addEventListener('click', async () => {
-  const b = event.target; b.disabled = true; b.textContent = 'Проверка...';
-  show('Запуск проверки обновлений...');
-  try {
-    const r = await fetch('/system/check', { method: 'POST' });
-    const j = await r.json();
-    show(j.ok ? 'Проверка запущена. Обновляем страницу...' : ('Ошибка: ' + (j.message||'')));
-    setTimeout(() => location.reload(), 1500);
-  } catch (e) {
-    show('Ошибка: ' + e);
-  } finally { b.disabled = false; b.textContent = 'Проверить обновления'; }
+checkBtn.addEventListener('click', async () => {
+    checkBtn.disabled = true;
+    checkBtn.textContent = 'Проверка...';
+    output.style.display = 'block';
+    output.textContent = 'Выполняется проверка обновлений...';
+    
+    const res = await fetch('/system/check', { method: 'POST' });
+    const data = await res.json();
+    
+    if (data.status === 'ok') {
+        output.textContent = data.output;
+        // перезагрузить страницу чтобы обновить статус
+        setTimeout(() => location.reload(), 1500);
+    } else {
+        output.textContent = 'Ошибка: ' + data.message;
+    }
+    checkBtn.disabled = false;
+    checkBtn.textContent = 'Проверить обновления';
 });
 
-document.getElementById('apply-btn').addEventListener('click', async () => {
-  if (!confirm('Применить обновление? Сервис будет перезапущен.')) return;
-  const b = event.target; b.disabled = true; b.textContent = 'Обновление...';
-  show('Запуск обновления (может занять несколько минут)...');
-  try {
-    const r = await fetch('/system/update', { method: 'POST' });
-    const j = await r.json();
-    show(j.ok ? 'Обновление запущено. Обновляем страницу...' : ('Ошибка: ' + (j.message||'')));
-    setTimeout(() => location.reload(), 3000);
-  } catch (e) {
-    show('Ошибка: ' + e);
-    b.disabled = false; b.textContent = 'Обновить';
-  }
+updateBtn.addEventListener('click', async () => {
+    if (!confirm('Применить обновление? Сервис будет перезапущен.')) return;
+    
+    updateBtn.disabled = true;
+    updateBtn.textContent = 'Обновление...';
+    output.style.display = 'block';
+    output.textContent = 'Применяется обновление (может занять несколько минут)...';
+    
+    const res = await fetch('/system/update', { method: 'POST' });
+    const data = await res.json();
+    
+    if (data.status === 'ok') {
+        output.textContent = data.output + '\n\nОбновление завершено, страница перезагрузится...';
+        setTimeout(() => location.reload(), 3000);
+    } else {
+        output.textContent = 'Ошибка: ' + data.message;
+        updateBtn.disabled = false;
+        updateBtn.textContent = 'Обновить';
+    }
 });
 </script>
 {% endblock %}
