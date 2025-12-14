@@ -2,128 +2,768 @@
 {% block title %}Приложения — Server UI{% endblock %}
 
 {% block content %}
-<section class="hero">
-  <h1 class="hero__title">Приложения</h1>
-  <p class="hero__subtitle">Каталог и управление Docker‑приложениями.</p>
-</section>
+<style>
+  .apps-page { max-width: 1120px; margin: 0 auto; padding: 10px 10px 50px; }
 
-{% if not docker_present %}
-  <div class="alert alert--danger">
-    Docker недоступен. Для установки приложений запустите Docker Engine и дайте панели доступ к /var/run/docker.sock.
-  </div>
-{% endif %}
+  .apps-head { display:flex; align-items:flex-end; justify-content:space-between; gap:12px; margin: 8px 0 14px; }
+  .apps-title { font-size: 22px; font-weight: 750; line-height: 1.15; }
+  .apps-sub { opacity: .72; font-size: 13px; margin-top: 6px; }
 
-<section class="card">
-  <h2 class="card__title">Установленные</h2>
+  .section { margin-top: 18px; }
+  .section-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin: 8px 0 10px; }
+  .section-title { font-size: 14px; font-weight: 700; opacity: .92; display:flex; align-items:center; gap:10px; }
+  .count-pill { font-size: 12px; opacity: .85; border: 1px solid rgba(255,255,255,.16); background: rgba(255,255,255,.06); padding: 3px 8px; border-radius: 999px; }
 
-  {% if installed|length == 0 %}
-    <p class="card__text muted">Пока ничего не установлено.</p>
-  {% else %}
-    <div class="apps">
-      {% for a in installed %}
-        <div class="appcard">
-          <div class="appcard__head">
-            <div class="apphead">
-              <div class="appicon">
-                <img class="appicon__img" src="{{ a.icon_url }}" alt="{{ a.title }}">
-              </div>
-              <div>
-                <div class="appcard__title">{{ a.title }}</div>
-                <div class="appcard__id mono">{{ a.id }}</div>
-              </div>
-            </div>
+  .apps-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
 
-            {% if a.status.ok and a.status.running %}
-              <div class="pill pill--ok">Запущено</div>
-            {% else %}
-              <div class="pill pill--warn">Остановлено</div>
-            {% endif %}
-          </div>
+  .app-card {
+    position: relative;
+    border-radius: 16px;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,.10);
+    background: rgba(255,255,255,.04);
+    backdrop-filter: blur(8px);
+    transition: transform .08s ease, border-color .08s ease, background .08s ease;
+    min-height: 160px;
+  }
+  .app-card:hover { transform: translateY(-1px); border-color: rgba(255,255,255,.18); background: rgba(255,255,255,.06); }
 
-          {% if a.url %}
-            <div class="appcard__desc muted">Адрес: <span class="mono">{{ a.url }}</span></div>
-          {% endif %}
+  .app-top { display:flex; gap: 12px; padding: 14px 14px 8px; align-items:center; }
+  .app-ico {
+    width: 56px; height: 56px; border-radius: 16px; flex: 0 0 auto;
+    background: rgba(0,0,0,.25);
+    display:flex; align-items:center; justify-content:center;
+    border: 1px solid rgba(255,255,255,.12);
+    overflow:hidden;
+  }
+  .app-ico img { width: 100%; height: 100%; object-fit: cover; }
 
-          {% if a.status.ok and a.status.containers %}
-            <div class="tile__lines">
-              {% for c in a.status.containers %}
-                <div class="kv">
-                  <div class="kv__row">
-                    <div class="kv__k">{{ c.name }}</div>
-                    <div class="kv__v">{{ c.status }}</div>
-                  </div>
-                </div>
-              {% endfor %}
-            </div>
-          {% endif %}
+  .app-meta { min-width: 0; }
+  .app-name { font-weight: 760; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .app-desc { opacity: .72; font-size: 12px; margin-top: 3px; height: 32px; overflow: hidden; }
 
-          <div class="actions">
-            <form method="post" action="/apps/action">
-              <input type="hidden" name="app_id" value="{{ a.id }}">
-              <button class="btn btn--ghost" name="action" value="start" type="submit">Запустить</button>
-              <button class="btn btn--ghost" name="action" value="stop" type="submit">Остановить</button>
-              <button class="btn btn--ghost" name="action" value="restart" type="submit">Перезапустить</button>
-              <button class="btn btn--danger" name="action" value="down" type="submit">Удалить контейнеры</button>
-            </form>
+  .app-row { display:flex; align-items:center; justify-content:space-between; gap:10px; padding: 0 14px 10px; }
+  .badge {
+    font-size: 11px;
+    opacity: .90;
+    border: 1px solid rgba(255,255,255,.14);
+    background: rgba(255,255,255,.05);
+    padding: 4px 8px;
+    border-radius: 999px;
+    display:inline-flex; align-items:center; gap:6px;
+  }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: rgba(180,180,180,.7); display:inline-block; }
+  .badge.ok .dot { background: rgba(90,255,140,.85); }
+  .badge.warn .dot { background: rgba(255,210,80,.9); }
+  .badge.err .dot { background: rgba(255,90,90,.9); }
 
-            {% if a.url %}
-              <a class="btn btn--ghost" href="{{ a.url }}" target="_blank" rel="noreferrer">Открыть</a>
-            {% endif %}
-          </div>
+  .app-actions { display:flex; gap: 8px; padding: 10px 14px 14px; flex-wrap: wrap; }
+  .btn {
+    appearance:none; border: 1px solid rgba(255,255,255,.14);
+    background: rgba(255,255,255,.06);
+    color: inherit; padding: 8px 10px;
+    border-radius: 12px; font-size: 12px;
+    cursor:pointer; transition: background .08s ease, border-color .08s ease, transform .05s ease;
+  }
+  .btn:hover { border-color: rgba(255,255,255,.22); background: rgba(255,255,255,.10); }
+  .btn:active { transform: scale(.99); }
+  .btn.primary { background: rgba(80,140,255,.20); border-color: rgba(80,140,255,.35); }
+  .btn.danger { background: rgba(255,90,90,.16); border-color: rgba(255,90,90,.28); }
+  .btn.ghost { background: transparent; }
 
-          <form class="form" method="post" action="/apps/icon" enctype="multipart/form-data">
-            <input type="hidden" name="app_id" value="{{ a.id }}">
-            <label class="field">
-              <span class="field__label">Иконка приложения</span>
-              <input class="input" type="file" name="file"
-                     accept="image/png,image/jpeg,image/webp,image/svg+xml" required>
-              <span class="field__hint">PNG, JPG, WebP или SVG.</span>
-            </label>
-            <div class="actions">
-              <button class="btn btn--ghost" type="submit">Загрузить иконку</button>
-            </div>
-          </form>
-        </div>
-      {% endfor %}
+  .kebab {
+    position:absolute; top: 10px; right: 10px;
+    width: 34px; height: 34px;
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,.10);
+    background: rgba(0,0,0,.20);
+    cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .kebab:hover { background: rgba(0,0,0,.30); border-color: rgba(255,255,255,.18); }
+
+  .menu {
+    position: absolute;
+    top: 48px;
+    right: 10px;
+    min-width: 210px;
+    border-radius: 14px;
+    border: 1px solid rgba(255,255,255,.14);
+    background: rgba(20,20,20,.92);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 10px 30px rgba(0,0,0,.45);
+    padding: 6px;
+    display:none;
+    z-index: 30;
+  }
+  .menu.open { display:block; }
+  .menu button {
+    width: 100%;
+    text-align: left;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    padding: 9px 10px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 13px;
+    opacity: .92;
+  }
+  .menu button:hover { background: rgba(255,255,255,.08); }
+  .menu .sep { height: 1px; margin: 6px 8px; background: rgba(255,255,255,.10); }
+  .menu .danger { color: rgba(255,120,120,1); }
+
+  .jobbox { padding: 0 14px 14px; }
+  .jobline { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top: 4px; font-size: 12px; opacity: .8; }
+  .progress {
+    margin-top: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: rgba(255,255,255,.10);
+    overflow:hidden;
+    border: 1px solid rgba(255,255,255,.10);
+  }
+  .progress > div {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, rgba(80,140,255,.0), rgba(80,140,255,.8), rgba(80,140,255,.0));
+  }
+  .progress.indeterminate > div {
+    width: 35%;
+    animation: indet 1.1s linear infinite;
+  }
+  @keyframes indet {
+    0% { transform: translateX(-120%); }
+    100% { transform: translateX(360%); }
+  }
+
+  /* Modal */
+  .modal-backdrop {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.55);
+    display:none;
+    z-index: 60;
+  }
+  .modal-backdrop.open { display:block; }
+  .modal {
+    position: fixed; left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+    width: min(920px, calc(100vw - 24px));
+    max-height: calc(100vh - 24px);
+    overflow: auto;
+    border-radius: 18px;
+    border: 1px solid rgba(255,255,255,.14);
+    background: rgba(20,20,20,.96);
+    box-shadow: 0 20px 60px rgba(0,0,0,.55);
+    padding: 14px;
+  }
+  .modal-head { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  .modal-title { display:flex; align-items:center; gap:12px; }
+  .modal-title .ico { width: 40px; height: 40px; border-radius: 12px; overflow:hidden; border: 1px solid rgba(255,255,255,.12); background: rgba(0,0,0,.25); }
+  .modal-title .ico img { width:100%; height:100%; object-fit:cover; }
+  .modal-title .name { font-weight: 780; font-size: 15px; }
+  .modal-title .sub { opacity:.7; font-size: 12px; margin-top: 2px; }
+  .modal-close { width: 38px; height: 38px; border-radius: 12px; }
+
+  .tabs { display:flex; gap: 8px; margin-top: 12px; border-bottom: 1px solid rgba(255,255,255,.10); padding-bottom: 10px; }
+  .tab { padding: 8px 10px; border-radius: 12px; border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.04); cursor:pointer; font-size: 12px; opacity:.9; }
+  .tab.active { background: rgba(80,140,255,.18); border-color: rgba(80,140,255,.35); }
+
+  .panel { display:none; padding: 12px 0 4px; }
+  .panel.active { display:block; }
+
+  .row { display:flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .field { display:flex; flex-direction:column; gap:6px; }
+  .field label { font-size: 12px; opacity:.75; }
+  select, input[type="text"] {
+    background: rgba(255,255,255,.06);
+    color: inherit;
+    border: 1px solid rgba(255,255,255,.12);
+    border-radius: 12px;
+    padding: 9px 10px;
+    outline: none;
+    min-width: 240px;
+  }
+  textarea, pre {
+    width: 100%;
+    border-radius: 14px;
+    border: 1px solid rgba(255,255,255,.12);
+    background: rgba(0,0,0,.25);
+    color: inherit;
+    padding: 10px;
+    font-size: 12px;
+    overflow: auto;
+  }
+  textarea { min-height: 280px; resize: vertical; }
+  pre { min-height: 240px; }
+
+  .hint { font-size: 12px; opacity: .70; margin-top: 10px; line-height: 1.35; }
+
+  .empty { opacity: .75; font-size: 13px; border: 1px dashed rgba(255,255,255,.16); border-radius: 14px; padding: 14px; }
+</style>
+
+<div class="apps-page">
+  <div class="apps-head">
+    <div>
+      <div class="apps-title">Приложения</div>
+      <div class="apps-sub">Каталог, установка и управление Docker‑приложениями.</div>
     </div>
-  {% endif %}
-</section>
+    <div class="badge {% if docker_present %}ok{% else %}err{% endif %}">
+      <span class="dot"></span>
+      {% if docker_present %}Docker доступен{% else %}Docker недоступен{% endif %}
+    </div>
+  </div>
 
-<section class="card">
-  <h2 class="card__title">Каталог</h2>
-  <div class="apps">
-    {% for a in catalog %}
-      <div class="appcard">
-        <div class="appcard__head">
-          <div class="apphead">
-            <div class="appicon">
-              <img class="appicon__img" src="{{ a.icon_url }}" alt="{{ a.title }}">
-            </div>
-            <div>
-              <div class="appcard__title">{{ a.title }}</div>
-              <div class="appcard__id mono">{{ a.id }}</div>
-            </div>
-          </div>
+  {% if not docker_present %}
+    <div class="empty">Docker недоступен — управление приложениями отключено.</div>
+  {% else %}
 
-          <div class="pill {{ 'pill--ok' if a.installed else 'pill--warn' }}">
-            {{ "Установлено" if a.installed else "Доступно" }}
-          </div>
+    <div class="section">
+      <div class="section-head">
+        <div class="section-title">Установленные <span class="count-pill">{{ installed|length }}</span></div>
+      </div>
+
+      {% if installed|length == 0 %}
+        <div class="empty">Пока нет установленных приложений.</div>
+      {% else %}
+        <div class="apps-grid">
+          {% for app in installed %}
+            {{ _self.app_card(app, true) }}
+          {% endfor %}
         </div>
+      {% endif %}
+    </div>
 
-        <div class="appcard__desc muted">{{ a.description }}</div>
+    <div class="section">
+      <div class="section-head">
+        <div class="section-title">Каталог <span class="count-pill">{{ catalog|length }}</span></div>
+      </div>
 
-        <div class="actions">
-          {% if a.installed %}
-            <button class="btn btn--ghost" type="button" disabled>Уже установлено</button>
-          {% else %}
-            <form method="post" action="/apps/install">
-              <input type="hidden" name="app_id" value="{{ a.id }}">
-              <button class="btn btn--primary" type="submit">Установить</button>
-            </form>
-          {% endif %}
+      {% if catalog|length == 0 %}
+        <div class="empty">В каталоге пусто (или всё уже установлено).</div>
+      {% else %}
+        <div class="apps-grid">
+          {% for app in catalog %}
+            {{ _self.app_card(app, false) }}
+          {% endfor %}
+        </div>
+      {% endif %}
+    </div>
+
+  {% endif %}
+</div>
+
+<!-- Modal -->
+<div id="modalBackdrop" class="modal-backdrop" aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal-head">
+      <div class="modal-title">
+        <div class="ico"><img id="mIcon" src="" alt=""></div>
+        <div>
+          <div class="name" id="mName">—</div>
+          <div class="sub" id="mSub">—</div>
         </div>
       </div>
-    {% endfor %}
+      <button class="btn modal-close" id="modalClose" type="button">✕</button>
+    </div>
+
+    <div class="tabs">
+      <button class="tab active" data-tab="actions" type="button">Actions</button>
+      <button class="tab" data-tab="logs" type="button">Logs</button>
+      <button class="tab" data-tab="console" type="button">Console</button>
+    </div>
+
+    <div id="panel-actions" class="panel active">
+      <div class="row" style="margin-bottom:10px;">
+        <button class="btn primary" id="btnOpen" type="button">Открыть</button>
+        <button class="btn" id="btnStart" type="button">Запустить</button>
+        <button class="btn" id="btnStop" type="button">Остановить</button>
+        <button class="btn" id="btnRestart" type="button">Перезапустить</button>
+        <button class="btn danger" id="btnDown" type="button">Удалить</button>
+      </div>
+      <div class="hint">
+        Действия запускаются в фоне: после клика появится job‑прогресс, а карточки обновятся после завершения.
+      </div>
+    </div>
+
+    <div id="panel-logs" class="panel">
+      <div class="row" style="margin-bottom:10px;">
+        <div class="field">
+          <label>Контейнер</label>
+          <select id="logsContainer"></select>
+        </div>
+        <div class="field">
+          <label>Tail</label>
+          <select id="logsTail">
+            <option value="200">200</option>
+            <option value="300" selected>300</option>
+            <option value="500">500</option>
+            <option value="1000">1000</option>
+          </select>
+        </div>
+        <button class="btn" id="btnReloadLogs" type="button">Обновить</button>
+      </div>
+      <textarea id="logsText" spellcheck="false" readonly></textarea>
+      <div class="hint">Логи берутся через Docker logs (timestamps включены).</div>
+    </div>
+
+    <div id="panel-console" class="panel">
+      <div class="row" style="margin-bottom:10px;">
+        <div class="field">
+          <label>Контейнер</label>
+          <select id="execContainer"></select>
+        </div>
+        <div class="field" style="flex:1; min-width: 280px;">
+          <label>Команда</label>
+          <input id="execCmd" type="text" placeholder="например: ls -la /" />
+        </div>
+        <button class="btn primary" id="btnExec" type="button">Выполнить</button>
+      </div>
+      <pre id="execOut"></pre>
+      <div class="hint">
+        Команда выполняется через Docker exec. Для интерактива (tty) тут упрощённый режим — “ввод → вывод”.
+      </div>
+    </div>
   </div>
-</section>
+</div>
+
+{% macro app_card(app, is_installed) %}
+  {% set st = app.status %}
+  {% set job = app.job %}
+  {% set is_running = (st and st.ok and st.running) %}
+  {% set has_job = (job and job.status in ['queued','running']) %}
+  {% set job_is_install = (job and job.kind == 'install') %}
+  {% set job_is_action = (job and job.kind == 'action') %}
+
+  <div class="app-card"
+       data-app-id="{{ app.id }}"
+       data-app-title="{{ app.title }}"
+       data-app-desc="{{ app.description }}"
+       data-app-url="{{ app.url }}"
+       data-app-icon="{{ app.icon_url }}"
+       data-app-installed="{{ '1' if is_installed else '0' }}">
+    <button class="kebab" type="button" aria-label="Menu" data-kebab="1">⋮</button>
+
+    <div class="menu" data-menu="1">
+      <button type="button" data-act="open">Открыть</button>
+      <div class="sep"></div>
+      <button type="button" data-act="settings">Настройки / Logs / Console</button>
+      <div class="sep"></div>
+      {% if is_installed %}
+        <button type="button" data-act="start">Запустить</button>
+        <button type="button" data-act="stop">Остановить</button>
+        <button type="button" data-act="restart">Перезапустить</button>
+        <div class="sep"></div>
+        <button class="danger" type="button" data-act="down">Удалить</button>
+      {% else %}
+        <button type="button" data-act="install">Установить</button>
+      {% endif %}
+    </div>
+
+    <div class="app-top">
+      <div class="app-ico"><img src="{{ app.icon_url }}" alt=""></div>
+      <div class="app-meta">
+        <div class="app-name">{{ app.title }}</div>
+        <div class="app-desc">{{ app.description }}</div>
+      </div>
+    </div>
+
+    <div class="app-row">
+      {% if is_installed %}
+        {% if is_running %}
+          <span class="badge ok"><span class="dot"></span>Запущено</span>
+        {% else %}
+          <span class="badge warn"><span class="dot"></span>Остановлено</span>
+        {% endif %}
+      {% else %}
+        <span class="badge"><span class="dot"></span>Не установлено</span>
+      {% endif %}
+
+      {% if has_job %}
+        <span class="badge warn"><span class="dot"></span>{{ job.status }}{% if job.kind %} • {{ job.kind }}{% endif %}</span>
+      {% endif %}
+    </div>
+
+    {% if has_job %}
+      <div class="jobbox">
+        <div class="jobline">
+          <div style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+            {{ job.message if job.message else 'Выполняется…' }}
+          </div>
+          <div style="white-space:nowrap;">
+            {% if job.progress is not none %}{{ job.progress }}%{% else %}…{% endif %}
+          </div>
+        </div>
+        <div class="progress {% if job.progress is none %}indeterminate{% endif %}">
+          <div style="{% if job.progress is not none %}width: {{ job.progress }}%;{% else %}{% endif %}"></div>
+        </div>
+      </div>
+    {% endif %}
+
+    <div class="app-actions">
+      {% if is_installed %}
+        <button class="btn primary" type="button" data-quick="open">Открыть</button>
+        <button class="btn" type="button" data-quick="settings">Настройки</button>
+      {% else %}
+        <button class="btn primary" type="button" data-quick="install">Установить</button>
+      {% endif %}
+      <button class="btn ghost" type="button" data-quick="icon">Иконка</button>
+    </div>
+
+    <!-- hidden icon upload -->
+    <form method="post" action="/apps/icon" enctype="multipart/form-data" style="display:none;" data-icon-form="1">
+      <input type="hidden" name="app_id" value="{{ app.id }}">
+      <input type="file" name="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" data-icon-file="1">
+    </form>
+  </div>
+{% endmacro %}
+
+<script>
+(function () {
+  const csrfNotUsed = true;
+
+  const $ = (sel, root=document) => root.querySelector(sel);
+  const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
+
+  function formPost(url, dataObj) {
+    const fd = new FormData();
+    Object.entries(dataObj).forEach(([k,v]) => fd.append(k, v));
+    return fetch(url, { method: 'POST', body: fd, redirect: 'follow' });
+  }
+
+  // --- Menu/kebab ---
+  function closeAllMenus() {
+    $$('[data-menu="1"]').forEach(m => m.classList.remove('open'));
+  }
+
+  document.addEventListener('click', (e) => {
+    const kebab = e.target.closest('[data-kebab="1"]');
+    const menuBtn = e.target.closest('[data-menu="1"] button');
+
+    if (kebab) {
+      const card = kebab.closest('.app-card');
+      const menu = $('[data-menu="1"]', card);
+      const isOpen = menu.classList.contains('open');
+      closeAllMenus();
+      if (!isOpen) menu.classList.add('open');
+      e.preventDefault();
+      return;
+    }
+
+    if (menuBtn) {
+      const card = menuBtn.closest('.app-card');
+      const act = menuBtn.getAttribute('data-act');
+      closeAllMenus();
+      handleAction(card, act);
+      e.preventDefault();
+      return;
+    }
+
+    if (!e.target.closest('[data-menu="1"]')) {
+      closeAllMenus();
+    }
+  });
+
+  // --- Quick buttons ---
+  document.addEventListener('click', (e) => {
+    const quick = e.target.closest('[data-quick]');
+    if (!quick) return;
+    const card = quick.closest('.app-card');
+    const act = quick.getAttribute('data-quick');
+
+    if (act === 'icon') {
+      const form = $('[data-icon-form="1"]', card);
+      const fileInput = $('[data-icon-file="1"]', form);
+      fileInput.onchange = () => form.submit();
+      fileInput.click();
+      return;
+    }
+
+    handleAction(card, act);
+  });
+
+  // --- Modal state ---
+  const modalBackdrop = $('#modalBackdrop');
+  const modalClose = $('#modalClose');
+
+  let modalApp = null; // {id,title,desc,url,icon,installed}
+  let containersCache = []; // [{name,status}]
+
+  function modalOpen(app) {
+    modalApp = app;
+    containersCache = [];
+
+    $('#mIcon').src = app.icon;
+    $('#mName').textContent = app.title;
+    $('#mSub').textContent = app.desc || '';
+
+    $('#btnOpen').disabled = !app.url;
+    $('#btnOpen').onclick = () => { if (app.url) window.open(app.url, '_blank'); };
+
+    // Actions
+    $('#btnStart').onclick = () => runAppAction(app.id, 'start');
+    $('#btnStop').onclick = () => runAppAction(app.id, 'stop');
+    $('#btnRestart').onclick = () => runAppAction(app.id, 'restart');
+    $('#btnDown').onclick = () => runAppAction(app.id, 'down');
+
+    // Tabs
+    setTab('actions');
+
+    modalBackdrop.classList.add('open');
+    modalBackdrop.setAttribute('aria-hidden', 'false');
+
+    // Load containers for logs/exec
+    loadContainers(app.id).then(() => {
+      fillContainerSelects();
+    });
+
+    // Load logs initially
+    loadLogs();
+  }
+
+  function modalCloseFn() {
+    modalBackdrop.classList.remove('open');
+    modalBackdrop.setAttribute('aria-hidden', 'true');
+    modalApp = null;
+  }
+
+  modalClose.addEventListener('click', modalCloseFn);
+  modalBackdrop.addEventListener('click', (e) => {
+    if (e.target === modalBackdrop) modalCloseFn();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && modalBackdrop.classList.contains('open')) modalCloseFn();
+  });
+
+  $$('.tab').forEach(t => {
+    t.addEventListener('click', () => setTab(t.getAttribute('data-tab')));
+  });
+
+  function setTab(name) {
+    $$('.tab').forEach(t => t.classList.toggle('active', t.getAttribute('data-tab') === name));
+    $('#panel-actions').classList.toggle('active', name === 'actions');
+    $('#panel-logs').classList.toggle('active', name === 'logs');
+    $('#panel-console').classList.toggle('active', name === 'console');
+  }
+
+  // --- API helpers ---
+  async function apiJson(url) {
+    const r = await fetch(url, { headers: { 'Accept': 'application/json' }});
+    return await r.json();
+  }
+
+  async function loadContainers(appId) {
+    const j = await apiJson(`/api/apps/${encodeURIComponent(appId)}/containers`);
+    if (j && j.ok) {
+      containersCache = j.containers || [];
+      return;
+    }
+    containersCache = [];
+  }
+
+  function fillContainerSelects() {
+    const logsSel = $('#logsContainer');
+    const execSel = $('#execContainer');
+
+    const items = containersCache.length ? containersCache : [{name: '', status: ''}];
+
+    function fill(sel) {
+      sel.innerHTML = '';
+      for (const c of items) {
+        const opt = document.createElement('option');
+        opt.value = c.name || '';
+        opt.textContent = c.name ? `${c.name} (${c.status})` : '(контейнер не найден)';
+        sel.appendChild(opt);
+      }
+    }
+    fill(logsSel);
+    fill(execSel);
+
+    // if empty container list => disable
+    const disabled = !containersCache.length;
+    logsSel.disabled = disabled;
+    execSel.disabled = disabled;
+    $('#btnReloadLogs').disabled = disabled;
+    $('#btnExec').disabled = disabled;
+    $('#execCmd').disabled = disabled;
+  }
+
+  async function loadLogs() {
+    if (!modalApp) return;
+    const container = $('#logsContainer').value || '';
+    const tail = $('#logsTail').value || '300';
+    $('#logsText').value = 'Загрузка логов…';
+
+    const url = new URL(`/api/apps/${encodeURIComponent(modalApp.id)}/logs`, window.location.origin);
+    if (container) url.searchParams.set('container', container);
+    url.searchParams.set('tail', tail);
+
+    const j = await apiJson(url.toString());
+    if (j && j.ok) $('#logsText').value = j.text || '';
+    else $('#logsText').value = (j && j.error) ? `Ошибка: ${j.error}` : 'Ошибка';
+  }
+
+  $('#btnReloadLogs').addEventListener('click', loadLogs);
+  $('#logsContainer').addEventListener('change', loadLogs);
+  $('#logsTail').addEventListener('change', loadLogs);
+
+  $('#btnExec').addEventListener('click', async () => {
+    if (!modalApp) return;
+    const cmd = ($('#execCmd').value || '').trim();
+    if (!cmd) return;
+
+    $('#execOut').textContent = 'Выполняется…';
+
+    const container = $('#execContainer').value || '';
+    const fd = new FormData();
+    fd.append('cmd', cmd);
+    if (container) fd.append('container', container);
+
+    const r = await fetch(`/api/apps/${encodeURIComponent(modalApp.id)}/exec`, { method: 'POST', body: fd });
+    const j = await r.json().catch(() => null);
+    if (j && j.ok) $('#execOut').textContent = j.output || '';
+    else $('#execOut').textContent = (j && j.error) ? `Ошибка: ${j.error}` : 'Ошибка';
+  });
+
+  // --- Actions wiring ---
+  function cardInfo(card) {
+    return {
+      id: card.getAttribute('data-app-id'),
+      title: card.getAttribute('data-app-title'),
+      desc: card.getAttribute('data-app-desc'),
+      url: card.getAttribute('data-app-url'),
+      icon: card.getAttribute('data-app-icon'),
+      installed: card.getAttribute('data-app-installed') === '1'
+    };
+  }
+
+  function handleAction(card, act) {
+    const app = cardInfo(card);
+
+    if (act === 'settings') {
+      modalOpen(app);
+      return;
+    }
+
+    if (act === 'open') {
+      if (app.url) window.open(app.url, '_blank');
+      else modalOpen(app);
+      return;
+    }
+
+    if (act === 'install') {
+      runInstall(app.id);
+      return;
+    }
+
+    if (act === 'start' || act === 'stop' || act === 'restart' || act === 'down') {
+      runAppAction(app.id, act);
+      return;
+    }
+  }
+
+  async function runInstall(appId) {
+    await formPost('/apps/install', { app_id: appId });
+    // начнём поллить job и при success перезагрузим страницу
+    watchAppJob(appId, { reloadOnSuccess: true });
+  }
+
+  async function runAppAction(appId, action) {
+    await formPost('/apps/action', { app_id: appId, action: action });
+    watchAppJob(appId, { reloadOnSuccess: true });
+  }
+
+  // --- Jobs polling (progress UI) ---
+  const pollState = new Map(); // appId -> timer
+
+  function watchAppJob(appId, { reloadOnSuccess }) {
+    if (pollState.has(appId)) return;
+
+    let tries = 0;
+    const t = setInterval(async () => {
+      tries += 1;
+      if (tries > 240) { // ~4 min @ 1s
+        clearInterval(t);
+        pollState.delete(appId);
+        return;
+      }
+
+      const j = await apiJson(`/api/apps/${encodeURIComponent(appId)}/job`);
+      if (!j || !j.ok) return;
+
+      const job = j.job;
+      updateCardJobUI(appId, job);
+
+      if (!job) return;
+
+      if (job.status === 'success' || job.status === 'error') {
+        // финально обновим карточку: проще перезагрузкой
+        clearInterval(t);
+        pollState.delete(appId);
+        if (reloadOnSuccess) window.location.reload();
+      }
+    }, 1000);
+
+    pollState.set(appId, t);
+  }
+
+  function ensureJobBox(card) {
+    let jobbox = card.querySelector('.jobbox');
+    if (jobbox) return jobbox;
+
+    jobbox = document.createElement('div');
+    jobbox.className = 'jobbox';
+    jobbox.innerHTML = `
+      <div class="jobline">
+        <div data-job-msg style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"></div>
+        <div data-job-pct style="white-space:nowrap;"></div>
+      </div>
+      <div class="progress"><div></div></div>
+    `;
+
+    // вставим перед actions (чтобы не ломать карточку)
+    const actions = card.querySelector('.app-actions');
+    actions.parentNode.insertBefore(jobbox, actions);
+    return jobbox;
+  }
+
+  function updateCardJobUI(appId, job) {
+    const card = document.querySelector(`.app-card[data-app-id="${CSS.escape(appId)}"]`);
+    if (!card) return;
+
+    if (!job) return;
+
+    // create box if needed
+    const jobbox = ensureJobBox(card);
+    const msg = jobbox.querySelector('[data-job-msg]');
+    const pct = jobbox.querySelector('[data-job-pct]');
+    const bar = jobbox.querySelector('.progress');
+    const fill = jobbox.querySelector('.progress > div');
+
+    msg.textContent = job.message || 'Выполняется…';
+
+    if (job.progress === null || job.progress === undefined) {
+      pct.textContent = '…';
+      bar.classList.add('indeterminate');
+      fill.style.width = '';
+    } else {
+      pct.textContent = `${job.progress}%`;
+      bar.classList.remove('indeterminate');
+      fill.style.width = `${job.progress}%`;
+    }
+  }
+
+  // Автоподхват уже запущенных jobs после загрузки страницы
+  window.addEventListener('load', () => {
+    document.querySelectorAll('.app-card').forEach(card => {
+      const appId = card.getAttribute('data-app-id');
+      // если на карточке уже есть прогресс (сервер отдал job queued/running), начинаем поллить
+      const hasServerJob = card.querySelector('.jobbox');
+      if (hasServerJob) watchAppJob(appId, { reloadOnSuccess: true });
+    });
+  });
+
+})();
+</script>
+
 {% endblock %}

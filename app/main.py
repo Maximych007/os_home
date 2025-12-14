@@ -1,4 +1,5 @@
 import os
+import asyncio
 import sqlite3
 import time
 import json
@@ -6,6 +7,7 @@ import socket
 import platform
 import tempfile
 import zipfile
+import uuid
 from datetime import datetime
 from pathlib import Path
 
@@ -49,158 +51,87 @@ AVAILABLE_TILES = {
 
 # ---- Каталог приложений (через Docker Engine API) ----
 # volumes: host_dir (relative to APPS_DIR/app_id) -> container_path
+# binds: host_abs_path -> container_path
 # ports: container_port/proto -> host_port
 APP_CATALOG = {
-    "jellyfin": {
-        "title": "Jellyfin",
-        "description": "Медиасервер",
-        "default_url": "http://localhost:8096",
-        "services": [
-            {
-                "name": "jellyfin",
-                "image": "jellyfin/jellyfin:latest",
-                "env": {},
-                "ports": {"8096/tcp": 8096},
-                "volumes": {"config": "/config", "cache": "/cache", "media": "/media"},
-            }
-        ],
-    },
-
-    "nextcloud": {
-        "title": "Nextcloud",
-        "description": "Файловое облако (PostgreSQL + Nextcloud)",
+    "qbittorrent": {
+        "title": "qBittorrent",
+        "description": "Торрент-клиент с веб-интерфейсом",
         "default_url": "http://localhost:8080",
         "services": [
             {
-                "name": "db",
-                "image": "postgres:16",
+                "name": "qbittorrent",
+                "image": "linuxserver/qbittorrent:latest",
                 "env": {
-                    "POSTGRES_PASSWORD": "nextcloud",
-                    "POSTGRES_USER": "nextcloud",
-                    "POSTGRES_DB": "nextcloud",
+                    "PUID": "1000",
+                    "PGID": "1000",
+                    "TZ": "Asia/Yekaterinburg",
+                    "WEBUI_PORT": "8080",
                 },
-                "ports": {},
-                "volumes": {"db": "/var/lib/postgresql/data"},
-            },
-            {
-                "name": "app",
-                "image": "nextcloud:29",
-                "env": {
-                    "POSTGRES_HOST": "db",
-                    "POSTGRES_PASSWORD": "nextcloud",
-                    "POSTGRES_USER": "nextcloud",
-                    "POSTGRES_DB": "nextcloud",
-                },
-                "ports": {"80/tcp": 8080},
-                "volumes": {"nc": "/var/www/html"},
-            },
-        ],
-    },
-
-    "portainer": {
-        "title": "Portainer CE",
-        "description": "Графический интерфейс для Docker",
-        "default_url": "http://localhost:9000",
-        "services": [
-            {
-                "name": "portainer",
-                "image": "portainer/portainer-ce:latest",
-                "env": {},
-                "ports": {"9000/tcp": 9000},
-                "volumes": {"data": "/data"},
-                "binds": {"/var/run/docker.sock": "/var/run/docker.sock"},
-            }
-        ],
-    },
-
-    "homeassistant": {
-        "title": "Home Assistant",
-        "description": "Умный дом (веб‑интерфейс обычно на :8123)",
-        "default_url": "http://localhost:8123",
-        "services": [
-            {
-                "name": "homeassistant",
-                "image": "ghcr.io/home-assistant/home-assistant:stable",
-                "env": {"TZ": "Asia/Yekaterinburg"},
-                "ports": {"8123/tcp": 8123},
-                "volumes": {"config": "/config"},
-            }
-        ],
-    },
-
-    "syncthing": {
-        "title": "Syncthing",
-        "description": "Синхронизация файлов между устройствами",
-        "default_url": "http://localhost:8384",
-        "services": [
-            {
-                "name": "syncthing",
-                "image": "syncthing/syncthing:latest",
-                "env": {},
                 "ports": {
-                    "8384/tcp": 8384,      # GUI
-                    "22000/tcp": 22000,
-                    "22000/udp": 22000,
-                    "21027/udp": 21027,
+                    "8080/tcp": 8080,
+                    "6881/tcp": 6881,
+                    "6881/udp": 6881,
                 },
-                "volumes": {"data": "/var/syncthing"},
+                "volumes": {
+                    "config": "/config",
+                    "downloads": "/downloads",
+                },
             }
         ],
     },
-
-    "grafana_prometheus": {
-        "title": "Grafana + Prometheus",
-        "description": "Мониторинг (Grafana на :3000, Prometheus на :9090)",
+    "adguardhome": {
+        "title": "AdGuard Home",
+        "description": "DNS-сервер с блокировкой рекламы/трекеров",
         "default_url": "http://localhost:3000",
         "services": [
             {
-                "name": "prometheus",
-                "image": "prom/prometheus:latest",
-                "env": {},
-                "ports": {"9090/tcp": 9090},
-                "volumes": {"prom": "/prometheus"},
-            },
-            {
-                "name": "grafana",
-                "image": "grafana/grafana:latest",
-                "env": {},
-                "ports": {"3000/tcp": 3000},
-                "volumes": {"grafana": "/var/lib/grafana"},
-            },
-        ],
-    },
-
-    "nodered": {
-        "title": "Node-RED",
-        "description": "Автоматизация и интеграции",
-        "default_url": "http://localhost:1880",
-        "services": [
-            {
-                "name": "nodered",
-                "image": "nodered/node-red:latest",
-                "env": {},
-                "ports": {"1880/tcp": 1880},
-                "volumes": {"data": "/data"},
+                "name": "adguardhome",
+                "image": "adguard/adguardhome:latest",
+                "env": {
+                    "TZ": "Asia/Yekaterinburg",
+                },
+                "ports": {
+                    "53/tcp": 53,
+                    "53/udp": 53,
+                    "3000/tcp": 3000,
+                },
+                "volumes": {
+                    "work": "/opt/adguardhome/work",
+                    "conf": "/opt/adguardhome/conf",
+                },
             }
         ],
     },
-
-    "code_server": {
-        "title": "code-server",
-        "description": "VS Code в браузере",
-        "default_url": "http://localhost:8081",
+    "wg-easy": {
+        "title": "WireGuard Easy",
+        "description": "WireGuard VPN + Web UI",
+        "default_url": "http://localhost:51821",
         "services": [
             {
-                "name": "code",
-                "image": "codercom/code-server:latest",
-                "env": {"PASSWORD": "change-me"},
-                "ports": {"8080/tcp": 8081},
-                "volumes": {"project": "/home/coder/project"},
+                "name": "wg-easy",
+                "image": "ghcr.io/wg-easy/wg-easy:latest",
+                "env": {
+                    "WG_HOST": "YOUR_SERVER_IP_OR_DDNS",
+                    "PASSWORD": "change-me",
+                    "WG_PORT": "51820",
+                },
+                "ports": {
+                    "51820/udp": 51820,
+                    "51821/tcp": 51821,
+                },
+                "volumes": {
+                    "config": "/etc/wireguard",
+                },
+                "cap_add": ["NET_ADMIN", "SYS_MODULE"],
+                "sysctls": {
+                    "net.ipv4.ip_forward": "1",
+                    "net.ipv4.conf.all.src_valid_mark": "1",
+                },
             }
         ],
     },
 }
-
 
 app = FastAPI()
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
@@ -221,37 +152,54 @@ def init_db() -> None:
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY CHECK (id = 1),
-                username TEXT NOT NULL UNIQUE,
-                password_hash TEXT NOT NULL,
-                created_at TEXT NOT NULL
+              id INTEGER PRIMARY KEY CHECK (id = 1),
+              username TEXT NOT NULL UNIQUE,
+              password_hash TEXT NOT NULL,
+              created_at TEXT NOT NULL
             )
             """
         )
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS ui_config (
-                id INTEGER PRIMARY KEY CHECK (id = 1),
-                tiles_order TEXT NOT NULL,
-                updated_at TEXT NOT NULL
+              id INTEGER PRIMARY KEY CHECK (id = 1),
+              tiles_order TEXT NOT NULL,
+              updated_at TEXT NOT NULL
             )
             """
         )
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS settings (
-                id INTEGER PRIMARY KEY CHECK (id = 1),
-                theme TEXT NOT NULL,
-                updated_at TEXT NOT NULL
+              id INTEGER PRIMARY KEY CHECK (id = 1),
+              theme TEXT NOT NULL,
+              updated_at TEXT NOT NULL
             )
             """
         )
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS app_icons (
-                app_id TEXT PRIMARY KEY,
-                filename TEXT NOT NULL,
-                updated_at TEXT NOT NULL
+              app_id TEXT PRIMARY KEY,
+              filename TEXT NOT NULL,
+              updated_at TEXT NOT NULL
+            )
+            """
+        )
+
+        # Jobs: очередь фоновых задач (docker pull/create/start/stop/...)
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS jobs (
+              id TEXT PRIMARY KEY,
+              kind TEXT NOT NULL,
+              app_id TEXT NOT NULL,
+              action TEXT,
+              status TEXT NOT NULL,
+              created_at TEXT NOT NULL,
+              started_at TEXT,
+              finished_at TEXT,
+              message TEXT
             )
             """
         )
@@ -288,7 +236,9 @@ def create_single_user(username: str, password: str) -> None:
 
 
 def set_password(new_password: str) -> None:
-    pw_hash = bcrypt.hashpw(new_password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    pw_hash = bcrypt.hashpw(new_password.encode("utf-8"), bcrypt.gensalt()).decode(
+        "utf-8"
+    )
     with db() as conn:
         conn.execute("UPDATE users SET password_hash=? WHERE id=1", (pw_hash,))
 
@@ -299,26 +249,29 @@ def verify_login(username: str, password: str) -> bool:
         return False
     if u["username"] != username:
         return False
-    return bcrypt.checkpw(password.encode("utf-8"), u["password_hash"].encode("utf-8"))
+    return bcrypt.checkpw(
+        password.encode("utf-8"), u["password_hash"].encode("utf-8")
+    )
 
 
 def get_tiles_order() -> list[str]:
     with db() as conn:
         row = conn.execute("SELECT tiles_order FROM ui_config WHERE id=1").fetchone()
-        if not row:
+    if not row:
+        return DEFAULT_TILES_ORDER[:]
+
+    try:
+        order = json.loads(row["tiles_order"])
+        if not isinstance(order, list):
             return DEFAULT_TILES_ORDER[:]
-        try:
-            order = json.loads(row["tiles_order"])
-            if not isinstance(order, list):
-                return DEFAULT_TILES_ORDER[:]
-            out, seen = [], set()
-            for x in order:
-                if isinstance(x, str) and x in AVAILABLE_TILES and x not in seen:
-                    out.append(x)
-                    seen.add(x)
-            return out if out else DEFAULT_TILES_ORDER[:]
-        except Exception:
-            return DEFAULT_TILES_ORDER[:]
+        out, seen = [], set()
+        for x in order:
+            if isinstance(x, str) and x in AVAILABLE_TILES and x not in seen:
+                out.append(x)
+                seen.add(x)
+        return out if out else DEFAULT_TILES_ORDER[:]
+    except Exception:
+        return DEFAULT_TILES_ORDER[:]
 
 
 def set_tiles_order(order: list[str]) -> None:
@@ -329,6 +282,7 @@ def set_tiles_order(order: list[str]) -> None:
             seen.add(x)
     if not out:
         out = DEFAULT_TILES_ORDER[:]
+
     with db() as conn:
         conn.execute(
             "UPDATE ui_config SET tiles_order=?, updated_at=? WHERE id=1",
@@ -339,7 +293,7 @@ def set_tiles_order(order: list[str]) -> None:
 def get_theme() -> str:
     with db() as conn:
         row = conn.execute("SELECT theme FROM settings WHERE id=1").fetchone()
-        return (row["theme"] if row else "dark") or "dark"
+    return (row["theme"] if row else "dark") or "dark"
 
 
 def set_theme(theme: str) -> None:
@@ -349,6 +303,103 @@ def set_theme(theme: str) -> None:
             "UPDATE settings SET theme=?, updated_at=? WHERE id=1",
             (theme, datetime.utcnow().isoformat()),
         )
+
+
+# ---------------- Jobs helpers ----------------
+def create_job(kind: str, app_id: str, action: str | None = None) -> str:
+    job_id = uuid.uuid4().hex
+    now = datetime.utcnow().isoformat()
+    with db() as conn:
+        conn.execute(
+            """
+            INSERT INTO jobs(id, kind, app_id, action, status, created_at, started_at, finished_at, message)
+            VALUES(?, ?, ?, ?, ?, ?, NULL, NULL, NULL)
+            """,
+            (job_id, kind, app_id, action, "queued", now),
+        )
+    return job_id
+
+
+def job_set_status(
+    job_id: str,
+    status: str,
+    message: str | None = None,
+    started: bool = False,
+    finished: bool = False,
+) -> None:
+    now = datetime.utcnow().isoformat()
+    with db() as conn:
+        if started and finished:
+            conn.execute(
+                """
+                UPDATE jobs
+                SET status=?, message=?, started_at=COALESCE(started_at, ?), finished_at=?
+                WHERE id=?
+                """,
+                (status, message, now, now, job_id),
+            )
+        elif started:
+            conn.execute(
+                """
+                UPDATE jobs
+                SET status=?, message=?, started_at=COALESCE(started_at, ?)
+                WHERE id=?
+                """,
+                (status, message, now, job_id),
+            )
+        elif finished:
+            conn.execute(
+                """
+                UPDATE jobs
+                SET status=?, message=?, finished_at=?
+                WHERE id=?
+                """,
+                (status, message, now, job_id),
+            )
+        else:
+            conn.execute(
+                "UPDATE jobs SET status=?, message=? WHERE id=?",
+                (status, message, job_id),
+            )
+
+
+def get_jobs(limit: int = 20) -> list[dict]:
+    with db() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, kind, app_id, action, status, created_at, started_at, finished_at, message
+            FROM jobs
+            ORDER BY created_at DESC
+            LIMIT ?
+            """,
+            (int(limit),),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_job(job_id: str) -> dict | None:
+    with db() as conn:
+        row = conn.execute(
+            """
+            SELECT id, kind, app_id, action, status, created_at, started_at, finished_at, message
+            FROM jobs
+            WHERE id=?
+            """,
+            (job_id,),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+async def run_job_in_thread(job_id: str, fn, *args):
+    job_set_status(job_id, "running", started=True)
+    try:
+        ok, msg = await asyncio.to_thread(fn, *args)
+        if ok:
+            job_set_status(job_id, "success", message=msg, finished=True)
+        else:
+            job_set_status(job_id, "error", message=msg, finished=True)
+    except Exception as e:
+        job_set_status(job_id, "error", message=str(e), finished=True)
 
 
 @app.on_event("startup")
@@ -383,6 +434,7 @@ def fmt_bytes(n: float) -> str:
                 return f"{n:.0f} {u}"
             return f"{n:.1f} {u}"
         n /= 1024
+    return f"{n:.1f} TB"
 
 
 def fmt_duration(seconds: int) -> str:
@@ -423,14 +475,19 @@ def get_cpu_temp_c():
 def list_all_disks():
     parts = psutil.disk_partitions(all=False)
     mountpoints, seen = [], set()
-
     for p in parts:
         mp = p.mountpoint
         if p.fstype in (
-            "tmpfs", "devtmpfs", "overlay", "squashfs", "proc", "sysfs", "cgroup", "cgroup2"
+            "tmpfs",
+            "devtmpfs",
+            "overlay",
+            "squashfs",
+            "proc",
+            "sysfs",
+            "cgroup",
+            "cgroup2",
         ):
             continue
-
         anchor = Path(mp).anchor or mp
         key = anchor.lower()
         if key in seen:
@@ -441,18 +498,31 @@ def list_all_disks():
     if not mountpoints:
         anchor = Path.cwd().anchor
         mountpoints = [anchor if anchor else "/"]
-
     return mountpoints
 
 
 def tile_cpu():
     cpu = psutil.cpu_percent(interval=0.2)
-    return {"id": "cpu", "title": AVAILABLE_TILES["cpu"], "value": f"{cpu:.0f}", "unit": "%", "sub": "Текущая нагрузка", "pct": max(0, min(100, int(cpu)))}
+    return {
+        "id": "cpu",
+        "title": AVAILABLE_TILES["cpu"],
+        "value": f"{cpu:.0f}",
+        "unit": "%",
+        "sub": "Текущая нагрузка",
+        "pct": max(0, min(100, int(cpu))),
+    }
 
 
 def tile_ram():
     mem = psutil.virtual_memory()
-    return {"id": "ram", "title": AVAILABLE_TILES["ram"], "value": fmt_gb(mem.used), "unit": "GB", "sub": f"из {fmt_gb(mem.total)} GB", "pct": int(mem.percent)}
+    return {
+        "id": "ram",
+        "title": AVAILABLE_TILES["ram"],
+        "value": fmt_gb(mem.used),
+        "unit": "GB",
+        "sub": f"из {fmt_gb(mem.total)} GB",
+        "pct": int(mem.percent),
+    }
 
 
 def tile_disk():
@@ -473,8 +543,14 @@ def tile_disk():
 
         total_used += used
         total_all += tot
-
-        lines.append({"label": mp, "used_gb": fmt_gb(used), "total_gb": fmt_gb(tot), "pct": pct})
+        lines.append(
+            {
+                "label": mp,
+                "used_gb": fmt_gb(used),
+                "total_gb": fmt_gb(tot),
+                "pct": pct,
+            }
+        )
 
     if total_all > 0:
         overall_pct = int((total_used / total_all) * 100)
@@ -485,25 +561,61 @@ def tile_disk():
         value = "—"
         sub = "нет данных"
 
-    return {"id": "disk", "title": AVAILABLE_TILES["disk"], "value": value, "unit": "GB", "sub": sub, "pct": max(0, min(100, overall_pct)), "lines": lines}
+    return {
+        "id": "disk",
+        "title": AVAILABLE_TILES["disk"],
+        "value": value,
+        "unit": "GB",
+        "sub": sub,
+        "pct": max(0, min(100, overall_pct)),
+        "lines": lines,
+    }
 
 
 def tile_temp():
     temp_c = get_cpu_temp_c()
-    return {"id": "temp", "title": AVAILABLE_TILES["temp"], "value": "N/A" if temp_c is None else f"{temp_c:.0f}", "unit": "°C", "sub": "По данным ОС", "pct": None}
+    return {
+        "id": "temp",
+        "title": AVAILABLE_TILES["temp"],
+        "value": "N/A" if temp_c is None else f"{temp_c:.0f}",
+        "unit": "°C",
+        "sub": "По данным ОС",
+        "pct": None,
+    }
 
 
 def tile_uptime():
     uptime_sec = int(time.time() - psutil.boot_time())
-    return {"id": "uptime", "title": AVAILABLE_TILES["uptime"], "value": fmt_duration(uptime_sec), "unit": "", "sub": "С момента запуска", "pct": None}
+    return {
+        "id": "uptime",
+        "title": AVAILABLE_TILES["uptime"],
+        "value": fmt_duration(uptime_sec),
+        "unit": "",
+        "sub": "С момента запуска",
+        "pct": None,
+    }
 
 
 def tile_net():
     net = psutil.net_io_counters(pernic=False)
-    return {"id": "net", "title": AVAILABLE_TILES["net"], "value": "Трафик", "unit": "", "sub": f"↓ {fmt_bytes(net.bytes_recv)}  ↑ {fmt_bytes(net.bytes_sent)}", "pct": None}
+    return {
+        "id": "net",
+        "title": AVAILABLE_TILES["net"],
+        "value": "Трафик",
+        "unit": "",
+        "sub": f"↓ {fmt_bytes(net.bytes_recv)} ↑ {fmt_bytes(net.bytes_sent)}",
+        "pct": None,
+    }
 
 
-TILE_BUILDERS = {"cpu": tile_cpu, "ram": tile_ram, "disk": tile_disk, "temp": tile_temp, "uptime": tile_uptime, "net": tile_net}
+TILE_BUILDERS = {
+    "cpu": tile_cpu,
+    "ram": tile_ram,
+    "disk": tile_disk,
+    "temp": tile_temp,
+    "uptime": tile_uptime,
+    "net": tile_net,
+}
 
 
 def build_tiles(order: list[str] | None = None):
@@ -577,7 +689,10 @@ def ensure_dirs_for_service(app_id: str, service_spec: dict) -> dict:
 
 
 def find_containers(client: docker.DockerClient, app_id: str):
-    return client.containers.list(all=True, filters={"label": [f"serverui.app={app_id}", "serverui.managed=true"]})
+    return client.containers.list(
+        all=True,
+        filters={"label": [f"serverui.app={app_id}", "serverui.managed=true"]},
+    )
 
 
 def app_status(app_id: str) -> dict:
@@ -590,11 +705,13 @@ def app_status(app_id: str) -> dict:
         rows = []
         running = False
         for c in containers:
-            rows.append({
-                "name": c.name,
-                "status": c.status,
-                "image": (c.image.tags[0] if c.image.tags else c.image.short_id),
-            })
+            rows.append(
+                {
+                    "name": c.name,
+                    "status": c.status,
+                    "image": (c.image.tags[0] if c.image.tags else c.image.short_id),
+                }
+            )
             if c.status == "running":
                 running = True
         return {"ok": True, "containers": rows, "running": running}
@@ -626,6 +743,9 @@ def install_app(app_id: str) -> tuple[bool, str]:
             env = svc.get("env") or {}
             labels = labels_for(app_id, svc_name)
 
+            cap_add = svc.get("cap_add")
+            sysctls = svc.get("sysctls")
+
             try:
                 existing = client.containers.get(container_name)
                 try:
@@ -637,7 +757,7 @@ def install_app(app_id: str) -> tuple[bool, str]:
             except NotFound:
                 pass
 
-            c = client.containers.create(
+            create_kwargs = dict(
                 image=svc["image"],
                 name=container_name,
                 environment=env,
@@ -647,6 +767,12 @@ def install_app(app_id: str) -> tuple[bool, str]:
                 restart_policy={"Name": "unless-stopped"},
                 detach=True,
             )
+            if cap_add:
+                create_kwargs["cap_add"] = cap_add
+            if sysctls:
+                create_kwargs["sysctls"] = sysctls
+
+            c = client.containers.create(**create_kwargs)
             net.connect(c, aliases=[svc_name])
             c.start()
 
@@ -666,12 +792,15 @@ def action_app(app_id: str, action: str) -> tuple[bool, str]:
         if action == "start":
             for c in containers:
                 c.start()
+
         elif action == "stop":
             for c in containers:
                 c.stop(timeout=15)
+
         elif action == "restart":
             for c in containers:
                 c.restart(timeout=15)
+
         elif action == "down":
             for c in containers:
                 try:
@@ -680,11 +809,13 @@ def action_app(app_id: str, action: str) -> tuple[bool, str]:
                 except DockerException:
                     pass
                 c.remove(v=False, force=True)
+
             try:
                 net = client.networks.get(network_name(app_id))
                 net.remove()
             except DockerException:
                 pass
+
         else:
             return False, "Неизвестное действие"
 
@@ -696,8 +827,10 @@ def action_app(app_id: str, action: str) -> tuple[bool, str]:
 # ---------------- Icons helpers ----------------
 def get_icon_filename(app_id: str) -> str | None:
     with db() as conn:
-        row = conn.execute("SELECT filename FROM app_icons WHERE app_id=?", (app_id,)).fetchone()
-        return row["filename"] if row else None
+        row = conn.execute(
+            "SELECT filename FROM app_icons WHERE app_id=?", (app_id,)
+        ).fetchone()
+    return row["filename"] if row else None
 
 
 def set_icon_filename(app_id: str, filename: str) -> None:
@@ -739,9 +872,16 @@ async def index():
 async def setup_page(request: Request):
     if not first_run():
         return RedirectResponse(url="/login", status_code=302)
+
     return templates.TemplateResponse(
         "setup.html",
-        {"request": request, "first_run": True, "theme": get_theme(), "version": VERSION, "authed": False},
+        {
+            "request": request,
+            "first_run": True,
+            "theme": get_theme(),
+            "version": VERSION,
+            "authed": False,
+        },
     )
 
 
@@ -755,18 +895,32 @@ async def setup_create_admin(
         return RedirectResponse(url="/login", status_code=302)
 
     admin_login = admin_login.strip()
+
     if len(admin_login) < 3:
         return templates.TemplateResponse(
             "setup.html",
-            {"request": request, "first_run": True, "theme": get_theme(), "version": VERSION, "authed": False,
-             "error": "Логин слишком короткий (минимум 3 символа)."},
+            {
+                "request": request,
+                "first_run": True,
+                "theme": get_theme(),
+                "version": VERSION,
+                "authed": False,
+                "error": "Логин слишком короткий (минимум 3 символа).",
+            },
             status_code=400,
         )
+
     if len(admin_password) < 6:
         return templates.TemplateResponse(
             "setup.html",
-            {"request": request, "first_run": True, "theme": get_theme(), "version": VERSION, "authed": False,
-             "error": "Пароль слишком короткий (минимум 6 символов)."},
+            {
+                "request": request,
+                "first_run": True,
+                "theme": get_theme(),
+                "version": VERSION,
+                "authed": False,
+                "error": "Пароль слишком короткий (минимум 6 символов).",
+            },
             status_code=400,
         )
 
@@ -778,9 +932,16 @@ async def setup_create_admin(
 async def login_page(request: Request):
     if first_run():
         return RedirectResponse(url="/setup", status_code=302)
+
     return templates.TemplateResponse(
         "login.html",
-        {"request": request, "first_run": False, "theme": get_theme(), "version": VERSION, "authed": False},
+        {
+            "request": request,
+            "first_run": False,
+            "theme": get_theme(),
+            "version": VERSION,
+            "authed": False,
+        },
     )
 
 
@@ -792,8 +953,14 @@ async def login_post(request: Request, login: str = Form(...), password: str = F
     if not verify_login(login.strip(), password):
         return templates.TemplateResponse(
             "login.html",
-            {"request": request, "first_run": False, "theme": get_theme(), "version": VERSION, "authed": False,
-             "error": "Неверный логин или пароль."},
+            {
+                "request": request,
+                "first_run": False,
+                "theme": get_theme(),
+                "version": VERSION,
+                "authed": False,
+                "error": "Неверный логин или пароль.",
+            },
             status_code=401,
         )
 
@@ -822,13 +989,15 @@ async def dashboard(request: Request):
         st = app_status(app_id)
         is_installed = bool(st.get("ok") and st.get("containers"))
         if is_installed:
-            installed_cards.append({
-                "id": app_id,
-                "title": meta.get("title", app_id),
-                "url": meta.get("default_url", ""),
-                "status": st,
-                "icon_url": icon_url(app_id),
-            })
+            installed_cards.append(
+                {
+                    "id": app_id,
+                    "title": meta.get("title", app_id),
+                    "url": meta.get("default_url", ""),
+                    "status": st,
+                    "icon_url": icon_url(app_id),
+                }
+            )
 
     return templates.TemplateResponse(
         "dashboard.html",
@@ -859,10 +1028,13 @@ async def api_tiles_config(request: Request):
     redir = require_auth(request)
     if redir:
         return JSONResponse({"ok": False, "redirect": "/login"}, status_code=401)
+
     return {
         "ok": True,
         "order": get_tiles_order(),
-        "available": [{"id": k, "title": AVAILABLE_TILES[k]} for k in AVAILABLE_TILES.keys()],
+        "available": [
+            {"id": k, "title": AVAILABLE_TILES[k]} for k in AVAILABLE_TILES.keys()
+        ],
     }
 
 
@@ -900,6 +1072,7 @@ async def system_page(request: Request):
         "os": platform.platform(),
         "arch": platform.machine(),
     }
+
     return templates.TemplateResponse(
         "system.html",
         {
@@ -920,6 +1093,7 @@ async def system_set_theme(request: Request, theme: str = Form(...)):
     redir = require_auth(request)
     if redir:
         return redir
+
     set_theme(theme)
     return RedirectResponse(url="/system", status_code=302)
 
@@ -938,13 +1112,14 @@ async def system_change_password(
     if not u:
         return RedirectResponse(url="/setup", status_code=302)
 
+    info = {
+        "version": VERSION,
+        "python": platform.python_version(),
+        "os": platform.platform(),
+        "arch": platform.machine(),
+    }
+
     if len(new_password) < 6:
-        info = {
-            "version": VERSION,
-            "python": platform.python_version(),
-            "os": platform.platform(),
-            "arch": platform.machine(),
-        }
         return templates.TemplateResponse(
             "system.html",
             {
@@ -962,12 +1137,6 @@ async def system_change_password(
         )
 
     if not verify_login(u["username"], current_password):
-        info = {
-            "version": VERSION,
-            "python": platform.python_version(),
-            "os": platform.platform(),
-            "arch": platform.machine(),
-        }
         return templates.TemplateResponse(
             "system.html",
             {
@@ -1034,25 +1203,32 @@ async def apps_page(request: Request):
         st = app_status(app_id)
         is_installed = bool(st.get("ok") and st.get("containers"))
         if is_installed:
-            installed_cards.append({
-                "id": app_id,
-                "title": meta.get("title", app_id),
-                "url": meta.get("default_url", ""),
-                "status": st,
-                "icon_url": icon_url(app_id),
-            })
+            installed_cards.append(
+                {
+                    "id": app_id,
+                    "title": meta.get("title", app_id),
+                    "url": meta.get("default_url", ""),
+                    "status": st,
+                    "icon_url": icon_url(app_id),
+                }
+            )
 
     catalog_cards = []
     for app_id, meta in APP_CATALOG.items():
         st = app_status(app_id)
         is_installed = bool(st.get("ok") and st.get("containers"))
-        catalog_cards.append({
-            "id": app_id,
-            "title": meta["title"],
-            "description": meta["description"],
-            "installed": is_installed,
-            "icon_url": icon_url(app_id),
-        })
+        catalog_cards.append(
+            {
+                "id": app_id,
+                "title": meta["title"],
+                "description": meta["description"],
+                "installed": is_installed,
+                "icon_url": icon_url(app_id),
+            }
+        )
+
+    # Последние jobs — можно вывести в шаблоне (если добавишь блок)
+    jobs_recent = get_jobs(limit=15)
 
     return templates.TemplateResponse(
         "apps.html",
@@ -1064,6 +1240,7 @@ async def apps_page(request: Request):
             "docker_present": docker_present(),
             "installed": installed_cards,
             "catalog": catalog_cards,
+            "jobs_recent": jobs_recent,
         },
     )
 
@@ -1074,8 +1251,13 @@ async def apps_install(request: Request, app_id: str = Form(...)):
     if redir:
         return redir
 
-    install_app(app_id)
-    return RedirectResponse(url="/apps", status_code=302)
+    if app_id not in APP_CATALOG:
+        return RedirectResponse(url="/apps", status_code=302)
+
+    job_id = create_job(kind="install", app_id=app_id, action=None)
+    asyncio.create_task(run_job_in_thread(job_id, install_app, app_id))
+
+    return RedirectResponse(url=f"/apps?job={job_id}", status_code=302)
 
 
 @app.post("/apps/action")
@@ -1084,8 +1266,33 @@ async def apps_action(request: Request, app_id: str = Form(...), action: str = F
     if redir:
         return redir
 
-    action_app(app_id, action)
-    return RedirectResponse(url="/apps", status_code=302)
+    if app_id not in APP_CATALOG:
+        return RedirectResponse(url="/apps", status_code=302)
+
+    job_id = create_job(kind="action", app_id=app_id, action=action)
+    asyncio.create_task(run_job_in_thread(job_id, action_app, app_id, action))
+
+    return RedirectResponse(url=f"/apps?job={job_id}", status_code=302)
+
+
+# API для опроса статусов jobs (UI может поллить раз в 1-2 сек)
+@app.get("/api/jobs")
+async def api_jobs(request: Request, limit: int = 20):
+    redir = require_auth(request)
+    if redir:
+        return JSONResponse({"ok": False, "redirect": "/login"}, status_code=401)
+    return {"ok": True, "jobs": get_jobs(limit=limit)}
+
+
+@app.get("/api/jobs/{job_id}")
+async def api_job(request: Request, job_id: str):
+    redir = require_auth(request)
+    if redir:
+        return JSONResponse({"ok": False, "redirect": "/login"}, status_code=401)
+    j = get_job(job_id)
+    if not j:
+        return JSONResponse({"ok": False, "error": "not found"}, status_code=404)
+    return {"ok": True, "job": j}
 
 
 @app.post("/apps/icon")
@@ -1113,10 +1320,11 @@ async def upload_app_icon(
 
     safe_name = f"{app_id}{ext}"
     out_path = ICONS_DIR / safe_name
+
     data = await file.read()
     out_path.write_bytes(data)
-    set_icon_filename(app_id, safe_name)
 
+    set_icon_filename(app_id, safe_name)
     return RedirectResponse(url="/apps", status_code=302)
 
 
@@ -1126,9 +1334,11 @@ async def get_app_icon(app_id: str):
     fn = get_icon_filename(app_id)
     if not fn:
         return FileResponse(str(default_path))
+
     path = ICONS_DIR / fn
     if not path.exists():
         return FileResponse(str(default_path))
+
     return FileResponse(str(path))
 
 
