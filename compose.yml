@@ -5,7 +5,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - SERVER_UI_SECRET=change-me-long-random
+      - SERVER_UI_SECRET=${SERVER_UI_SECRET}
       # Можно явно указать DOCKER_HOST, но обычно достаточно сокета.
       # - DOCKER_HOST=unix:///var/run/docker.sock
     volumes:
