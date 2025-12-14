@@ -6,11 +6,11 @@ services:
       - "8000:8000"
     environment:
       - SERVER_UI_SECRET=${SERVER_UI_SECRET}
+      # Можно явно указать DOCKER_HOST, но обычно достаточно сокета.
+      # - DOCKER_HOST=unix:///var/run/docker.sock
     volumes:
-      # Данные приложения (sqlite + каталоги приложений)
+      # Данные приложения (sqlite + apps данные)
       - ./app/data:/app/app/data
-      # Доступ к Docker Engine
+      # Доступ к Docker Engine API через unix-socket [web:360]
       - /var/run/docker.sock:/var/run/docker.sock
-      # Общая папка состояния для обновлений
-      - /var/lib/os_home:/var/lib/os_home:rw
     restart: unless-stopped
