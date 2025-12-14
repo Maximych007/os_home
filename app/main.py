@@ -1143,3 +1143,70 @@ async def favicon():
     if path.exists():
         return FileResponse(str(path))
     return RedirectResponse(url="/static/favicon.ico", status_code=302)
+
+# ======= Updates (версия системы и проверка/обновления) =======
+from fastapi import Depends
+from fastapi.responses import HTMLResponse
+from pathlib import Path
+import json, subprocess
+
+STATE_FILE = Path("/var/lib/os_home/update.json")
+TRIGGER_FILE = Path("/var/lib/os_home/trigger")
+
+def get_current_version() -> str:
+    # Версия панели из константы VERSION в этом файле
+    try:
+        return VERSION
+    except Exception:
+        return "unknown"
+
+def read_update_state():
+    if STATE_FILE.exists():
+        try:
+            return json.loads(STATE_FILE.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return {"checked_at": "", "local_version": get_current_version(),
+            "remote_version": "", "os_version": "", "update_available": False}
+
+@app.get("/system", response_class=HTMLResponse)
+async def system_page(request: Request):
+    redir = require_auth(request)
+    if redir: return redir
+    u = get_single_user()
+    info = {
+        "version": get_current_version(),
+        "python": platform.python_version(),
+        "os": platform.platform(),
+        "arch": platform.machine(),
+    }
+    state = read_update_state()
+    return templates.TemplateResponse("system.html", {
+        "request": request,
+        "theme": get_theme(),
+        "version": VERSION,
+        "authed": True,
+        "user": (u["username"] if u else ""),
+        "net": get_network_info(),
+        "info": info,
+        "docker_present": docker_present(),
+        "upd": state
+    })
+
+@app.post("/system/check")
+async def system_check(request: Request):
+    redir = require_auth(request)
+    if redir: return JSONResponse({"ok": False, "redirect": "/login"}, status_code=401)
+    TRIGGER_FILE.parent.mkdir(parents=True, exist_ok=True)
+    # Пишем триггер "check" — systemd path-юнит запустит сервис
+    TRIGGER_FILE.write_text("check\n", encoding="utf-8")
+    return {"ok": True, "message": "Проверка запущена"}
+
+@app.post("/system/update")
+async def system_update(request: Request):
+    redir = require_auth(request)
+    if redir: return JSONResponse({"ok": False, "redirect": "/login"}, status_code=401)
+    TRIGGER_FILE.parent.mkdir(parents=True, exist_ok=True)
+    # Пишем триггер "apply" — service выполнит pull + compose up -d --build
+    TRIGGER_FILE.write_text("apply\n", encoding="utf-8")
+    return {"ok": True, "message": "Обновление запущено"}
