@@ -1,71 +1,104 @@
 {% extends "base.html" %}
-{% block title %}Система{% endblock %}
+{% block title %}Система — Server UI{% endblock %}
+
 {% block content %}
-<div class="container">
-    <h2>Система</h2>
-    
-    <div class="card">
-        <h3>Версия</h3>
-        <p><strong>Текущая версия:</strong> {{ current_version }}</p>
-        {% if update_available %}
-        <p class="alert alert-info">✨ Доступна новая версия</p>
-        {% endif %}
+<section class="hero">
+  <h1 class="hero__title">Система</h1>
+  <p class="hero__subtitle">Настройка темы, пароля и просмотр сведений о системе.</p>
+</section>
+
+<section class="grid grid--2">
+  <div class="card">
+    <h2 class="card__title">Учётная запись</h2>
+    <p class="card__text">Текущий пользователь: <span class="mono">{{ user }}</span></p>
+
+    <form class="form" method="post" action="/system/password">
+      <label class="field">
+        <span class="field__label">Текущий пароль</span>
+        <input class="input" type="password" name="current_password" required autocomplete="current-password">
+      </label>
+
+      <label class="field">
+        <span class="field__label">Новый пароль</span>
+        <input class="input" type="password" name="new_password" required autocomplete="new-password" minlength="6">
+        <span class="field__hint">Минимум 6 символов.</span>
+      </label>
+
+      <div class="actions">
+        <button class="btn btn--primary" type="submit">Сменить пароль</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2 class="card__title">Оформление</h2>
+
+    <form class="form" method="post" action="/system/theme">
+      <label class="field">
+        <span class="field__label">Тема интерфейса</span>
+        <select class="select" name="theme">
+          <option value="dark" {% if theme == "dark" %}selected{% endif %}>Тёмная</option>
+          <option value="light" {% if theme == "light" %}selected{% endif %}>Светлая</option>
+        </select>
+      </label>
+
+      <div class="actions">
+        <button class="btn btn--primary" type="submit">Применить</button>
+      </div>
+    </form>
+  </div>
+</section>
+
+<section class="card">
+  <h2 class="card__title">Информация о системе</h2>
+  <div class="kvlist">
+    <div class="kvlist__row">
+      <div class="kv__k">Версия панели</div>
+      <div class="kv__v mono">{{ info.version }}</div>
     </div>
-
-    <div class="card">
-        <h3>Обновления</h3>
-        <button id="check-btn" class="btn">Проверить обновления</button>
-        <button id="update-btn" class="btn btn-primary" {% if not update_available %}disabled{% endif %}>
-            Обновить
-        </button>
-        <pre id="output" style="margin-top: 1rem; background: #f5f5f5; padding: 1rem; border-radius: 4px; display: none;"></pre>
+    <div class="kvlist__row">
+      <div class="kv__k">Python</div>
+      <div class="kv__v mono">{{ info.python }}</div>
     </div>
-</div>
+    <div class="kvlist__row">
+      <div class="kv__k">Операционная система</div>
+      <div class="kv__v mono">{{ info.os }}</div>
+    </div>
+    <div class="kvlist__row">
+      <div class="kv__k">Архитектура</div>
+      <div class="kv__v mono">{{ info.arch }}</div>
+    </div>
+    <div class="kvlist__row">
+      <div class="kv__k">Docker</div>
+      <div class="kv__v mono">
+        {% if docker_present %}доступен{% else %}не найден{% endif %}
+      </div>
+    </div>
+  </div>
+</section>
 
-<script>
-const checkBtn = document.getElementById('check-btn');
-const updateBtn = document.getElementById('update-btn');
-const output = document.getElementById('output');
+<section class="card">
+  <h2 class="card__title">Сеть</h2>
+  <div class="kvlist">
+    <div class="kvlist__row">
+      <div class="kv__k">Имя хоста</div>
+      <div class="kv__v mono">{{ net.hostname }}</div>
+    </div>
+    {% for ip in net.ips %}
+      <div class="kvlist__row">
+        <div class="kv__k">{{ ip.iface }}</div>
+        <div class="kv__v mono">{{ ip.ip }}</div>
+      </div>
+    {% endfor %}
+  </div>
+</section>
 
-checkBtn.addEventListener('click', async () => {
-    checkBtn.disabled = true;
-    checkBtn.textContent = 'Проверка...';
-    output.style.display = 'block';
-    output.textContent = 'Выполняется проверка обновлений...';
-    
-    const res = await fetch('/system/check', { method: 'POST' });
-    const data = await res.json();
-    
-    if (data.status === 'ok') {
-        output.textContent = data.output;
-        // перезагрузить страницу чтобы обновить статус
-        setTimeout(() => location.reload(), 1500);
-    } else {
-        output.textContent = 'Ошибка: ' + data.message;
-    }
-    checkBtn.disabled = false;
-    checkBtn.textContent = 'Проверить обновления';
-});
-
-updateBtn.addEventListener('click', async () => {
-    if (!confirm('Применить обновление? Сервис будет перезапущен.')) return;
-    
-    updateBtn.disabled = true;
-    updateBtn.textContent = 'Обновление...';
-    output.style.display = 'block';
-    output.textContent = 'Применяется обновление (может занять несколько минут)...';
-    
-    const res = await fetch('/system/update', { method: 'POST' });
-    const data = await res.json();
-    
-    if (data.status === 'ok') {
-        output.textContent = data.output + '\n\nОбновление завершено, страница перезагрузится...';
-        setTimeout(() => location.reload(), 3000);
-    } else {
-        output.textContent = 'Ошибка: ' + data.message;
-        updateBtn.disabled = false;
-        updateBtn.textContent = 'Обновить';
-    }
-});
+<section class="card">
+  <h2 class="card__title">Резервная копия</h2>
+  <p class="card__text">Можно скачать архив с базой данных и папками приложений.</p>
+  <div class="actions">
+    <a class="btn btn--primary" href="/system/backup">Скачать backup</a>
+  </div>
+</section>
 </script>
 {% endblock %}
