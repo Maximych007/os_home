@@ -1353,3 +1353,4 @@ async def favicon():
     if path.exists():
         return FileResponse(str(path))
     return RedirectResponse(url="/static/favicon.ico", status_code=302)
+ 
