@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}Приложения — Server UI{% endblock %}
+
+{% block content %}
+<section class="hero">
+  <h1 class="hero__title">Приложения</h1>
+  <p class="hero__subtitle">Каталог и управление Docker‑приложениями.</p>
+</section>
+
+{% if not docker_present %}
+  <div class="alert alert--danger">
+    Docker недоступен. Для установки приложений запустите Docker Engine и дайте панели доступ к /var/run/docker.sock.
+  </div>
+{% endif %}
+
+<section class="card">
+  <h2 class="card__title">Установленные</h2>
+
+  {% if installed|length == 0 %}
+    <p class="card__text muted">Пока ничего не установлено.</p>
+  {% else %}
+    <div class="apps">
+      {% for a in installed %}
+        <div class="appcard">
+          <div class="appcard__head">
+            <div class="apphead">
+              <div class="appicon">
+                <img class="appicon__img" src="{{ a.icon_url }}" alt="{{ a.title }}">
+              </div>
+              <div>
+                <div class="appcard__title">{{ a.title }}</div>
+                <div class="appcard__id mono">{{ a.id }}</div>
+              </div>
+            </div>
+
+            {% if a.status.ok and a.status.running %}
+              <div class="pill pill--ok">Запущено</div>
+            {% else %}
+              <div class="pill pill--warn">Остановлено</div>
+            {% endif %}
+          </div>
+
+          {% if a.url %}
+            <div class="appcard__desc muted">Адрес: <span class="mono">{{ a.url }}</span></div>
+          {% endif %}
+
+          {% if a.status.ok and a.status.containers %}
+            <div class="tile__lines">
+              {% for c in a.status.containers %}
+                <div class="kv">
+                  <div class="kv__row">
+                    <div class="kv__k">{{ c.name }}</div>
+                    <div class="kv__v">{{ c.status }}</div>
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+          {% endif %}
+
+          <div class="actions">
+            <form method="post" action="/apps/action">
+              <input type="hidden" name="app_id" value="{{ a.id }}">
+              <button class="btn btn--ghost" name="action" value="start" type="submit">Запустить</button>
+              <button class="btn btn--ghost" name="action" value="stop" type="submit">Остановить</button>
+              <button class="btn btn--ghost" name="action" value="restart" type="submit">Перезапустить</button>
+              <button class="btn btn--danger" name="action" value="down" type="submit">Удалить контейнеры</button>
+            </form>
+
+            {% if a.url %}
+              <a class="btn btn--ghost" href="{{ a.url }}" target="_blank" rel="noreferrer">Открыть</a>
+            {% endif %}
+          </div>
+
+          <form class="form" method="post" action="/apps/icon" enctype="multipart/form-data">
+            <input type="hidden" name="app_id" value="{{ a.id }}">
+            <label class="field">
+              <span class="field__label">Иконка приложения</span>
+              <input class="input" type="file" name="file"
+                     accept="image/png,image/jpeg,image/webp,image/svg+xml" required>
+              <span class="field__hint">PNG, JPG, WebP или SVG.</span>
+            </label>
+            <div class="actions">
+              <button class="btn btn--ghost" type="submit">Загрузить иконку</button>
+            </div>
+          </form>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2 class="card__title">Каталог</h2>
+  <div class="apps">
+    {% for a in catalog %}
+      <div class="appcard">
+        <div class="appcard__head">
+          <div class="apphead">
+            <div class="appicon">
+              <img class="appicon__img" src="{{ a.icon_url }}" alt="{{ a.title }}">
+            </div>
+            <div>
+              <div class="appcard__title">{{ a.title }}</div>
+              <div class="appcard__id mono">{{ a.id }}</div>
+            </div>
+          </div>
+
+          <div class="pill {{ 'pill--ok' if a.installed else 'pill--warn' }}">
+            {{ "Установлено" if a.installed else "Доступно" }}
+          </div>
+        </div>
+
+        <div class="appcard__desc muted">{{ a.description }}</div>
+
+        <div class="actions">
+          {% if a.installed %}
+            <button class="btn btn--ghost" type="button" disabled>Уже установлено</button>
+          {% else %}
+            <form method="post" action="/apps/install">
+              <input type="hidden" name="app_id" value="{{ a.id }}">
+              <button class="btn btn--primary" type="submit">Установить</button>
+            </form>
+          {% endif %}
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

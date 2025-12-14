@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block title %}Первый запуск — Server UI{% endblock %}
+
+{% block content %}
+<section class="hero">
+  <h1 class="hero__title">Первый запуск</h1>
+  <p class="hero__subtitle">
+    Создайте единственного администратора. После этого регистрация будет закрыта и останется только вход.
+  </p>
+</section>
+
+<section class="card">
+  <h2 class="card__title">Администратор</h2>
+
+  <form class="form" method="post" action="/setup">
+    <label class="field">
+      <span class="field__label">Логин</span>
+      <input class="input" name="admin_login" autocomplete="username" required minlength="3" />
+      <span class="field__hint">Минимум 3 символа.</span>
+    </label>
+
+    <label class="field">
+      <span class="field__label">Пароль</span>
+      <input class="input" type="password" name="admin_password" autocomplete="new-password" required minlength="6" />
+      <span class="field__hint">Минимум 6 символов.</span>
+    </label>
+
+    <div class="actions">
+      <button class="btn btn--primary" type="submit">Создать</button>
+      <a class="btn btn--ghost" href="/login">Перейти к входу</a>
+    </div>
+  </form>
+</section>
+{% endblock %}

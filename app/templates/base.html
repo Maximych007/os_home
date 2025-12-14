@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="dark" />
+  <title>{% block title %}Server UI{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='/style.css') }}">
+  {% block head %}{% endblock %}
+</head>
+
+<body class="theme-{{ theme or 'dark' }}">
+  <header class="topbar">
+    <div class="brand">
+      <a class="brand__link" href="/dashboard">Server UI</a>
+      <span class="brand__badge">v{{ version or "" }}</span>
+    </div>
+
+    {% if authed %}
+    <nav class="nav">
+      <a class="nav__link" href="/dashboard">Главная</a>
+      <a class="nav__link" href="/apps">Приложения</a>
+      <a class="nav__link" href="/system">Система</a>
+      <a class="nav__link" href="/logout">Выход</a>
+      {% block nav %}{% endblock %}
+    </nav>
+    {% endif %}
+  </header>
+
+  <main class="container">
+    {% if error %}<div class="alert alert--danger">{{ error }}</div>{% endif %}
+    {% if message %}<div class="alert alert--info">{{ message }}</div>{% endif %}
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="footer">
+    <div class="footer__inner">
+      <span>Локальная панель управления</span>
+      <span class="dot">•</span>
+      <span>{{ now or "" }}</span>
+    </div>
+  </footer>
+
+  {% block scripts %}{% endblock %}
+</body>
+</html>

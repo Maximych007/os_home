@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block title %}Вход — Server UI{% endblock %}
+
+{% block content %}
+<section class="hero">
+  <h1 class="hero__title">Вход</h1>
+  <p class="hero__subtitle">Авторизация по логину и паролю администратора.</p>
+</section>
+
+<section class="card">
+  <h2 class="card__title">Авторизация</h2>
+
+  <form class="form" method="post" action="/login">
+    <label class="field">
+      <span class="field__label">Логин</span>
+      <input class="input" name="login" autocomplete="username" required />
+    </label>
+
+    <label class="field">
+      <span class="field__label">Пароль</span>
+      <input class="input" type="password" name="password" autocomplete="current-password" required />
+    </label>
+
+    <div class="actions">
+      <button class="btn btn--primary" type="submit">Войти</button>
+      <a class="btn btn--ghost" href="/">На главную</a>
+    </div>
+  </form>
+
+  <hr class="hr">
+
+  <p class="card__text muted">
+    Если это первый запуск — пройдите настройку администратора.
+  </p>
+  <div class="actions">
+    <a class="btn btn--ghost" href="/setup">Первый запуск</a>
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+.git/
+.vscode/
+.DS_Store
+
+# локальные данные не копируем в образ (они монтируются volume-ом)
+app/data/
