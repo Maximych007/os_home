@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="hero">
+  <div>
+    <h2>Система</h2>
+    <p>Обновления, пароль, бэкап.</p>
+  </div>
+  <div class="heroActions">
+    <button class="btn" id="checkUpdBtn" type="button">Проверить обновления</button>
+    <button class="btn primary" id="doUpdBtn" type="button" disabled>Обновить</button>
+    <button class="btn" id="backupBtn" type="button">Backup</button>
+  </div>
+</div>
+
+<div class="grid two">
+  <div class="card">
+    <h3>Обновления</h3>
+    <div class="kvlist">
+      <div class="kvrow"><span class="kvk">Текущая версия</span><span class="kvv mono" id="curVer">v{{ version }}</span></div>
+      <div class="kvrow"><span class="kvk">Статус</span><span class="kvv" id="updStatus"><span class="pill warn">не проверено</span></span></div>
+      <div class="kvrow"><span class="kvk">Поддержка</span><span class="kvv mono" id="updSupported">—</span></div>
+      <div class="kvrow"><span class="kvk">Отставание</span><span class="kvv mono" id="updBehind">—</span></div>
+    </div>
+    <div class="logBox" style="margin-top:12px"><pre class="logPre" id="updLog"></pre></div>
+    <div class="muted" style="font-size:12px; margin-top:10px">
+      После обновления обычно нужен перезапуск сервиса (systemd/docker).
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Смена пароля</h3>
+    <div class="field">
+      <div class="label">Текущий пароль</div>
+      <input class="select" id="curPass" type="password" autocomplete="current-password">
+    </div>
+    <div class="field" style="margin-top:10px">
+      <div class="label">Новый пароль</div>
+      <input class="select" id="newPass" type="password" autocomplete="new-password">
+    </div>
+    <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:12px">
+      <button class="btn primary" id="savePassBtn" type="button">Сохранить</button>
+    </div>
+
+    <hr class="hr">
+    <h3>Информация</h3>
+    <div class="kvlist" id="sysInfoKv"></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script type="module" src="{{ url_for('static', path='system.js') }}"></script>
+{% endblock %}

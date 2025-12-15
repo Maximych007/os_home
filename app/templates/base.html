@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="ru" data-theme="{{ theme or 'dark' }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ServerOS UI</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='serveros.css') }}">
+</head>
+<body>
+
+<div class="backdrop" id="backdrop"></div>
+
+<div class="shell">
+  {% include "sidebar.html" %}
+  <main class="main">
+    {% include "topbar.html" %}
+    <div class="container">
+      {% block content %}{% endblock %}
+    </div>
+  </main>
+</div>
+
+<script type="module" src="{{ url_for('static', path='common.js') }}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

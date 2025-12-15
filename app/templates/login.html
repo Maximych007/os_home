@@ -1,0 +1,41 @@
+{% extends "base_auth.html" %}
+{% block content %}
+<div class="modalHead">
+  <div>
+    <h1 class="modalTitle">ServerOS UI</h1>
+    <div class="modalSub">Вход</div>
+  </div>
+  <div style="display:flex; gap:10px; align-items:center">
+    <button class="iconbtn" id="loginThemeBtn" title="Тема" type="button">☼</button>
+  </div>
+</div>
+
+<div class="modalBody">
+  <div class="kvrow" id="loginError" style="display:none; border-color: rgba(255,107,107,.35); background: rgba(255,107,107,.12)">
+    <span class="kvk">Ошибка</span>
+    <span class="kvv" id="loginErrorText">—</span>
+  </div>
+
+  <form id="loginForm" class="grid" style="gap:12px; margin-top:12px;">
+    <div class="field">
+      <div class="label">Логин</div>
+      <input class="select" name="login" placeholder="admin" autocomplete="username">
+    </div>
+    <div class="field">
+      <div class="label">Пароль</div>
+      <input class="select" name="password" type="password" placeholder="••••••" autocomplete="current-password">
+    </div>
+    <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end; align-items:center">
+      <button class="btn primary" type="submit">Войти</button>
+    </div>
+  </form>
+
+  <div class="muted" style="font-size:12px; display:flex; justify-content:space-between; gap:10px; margin-top:12px">
+    <span class="mono">v{{ version }}</span>
+    <span>Docker</span>
+    <span class="pill ok" id="dockerPill">—</span>
+  </div>
+</div>
+
+<script type="module" src="{{ url_for('static', path='login.js') }}"></script>
+{% endblock %}

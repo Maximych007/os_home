@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="hero">
+  <div>
+    <h2>Задачи</h2>
+    <p>Очередь install/action.</p>
+  </div>
+</div>
+
+<div class="card">
+  <h3>Все задачи</h3>
+  <div class="kvlist" id="jobsFull"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script type="module" src="{{ url_for('static', path='jobs.js') }}"></script>
+{% endblock %}

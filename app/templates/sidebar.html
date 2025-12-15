@@ -1,0 +1,31 @@
+<aside class="sidebar" id="sidebar">
+  <div class="brandBox">
+    <div>
+      <div class="brandBoxname">ServerOS</div>
+      <div class="brandBoxsub">Панель управления</div>
+    </div>
+    <div class="pill ok mono">v{{ version }}</div>
+  </div>
+
+  <div class="nav" id="nav">
+    <a class="navItem {{ 'active' if active=='home' else '' }}" href="/home">
+      <div class="navLeft"><span class="navIcon">H</span><span>Главная</span></div>
+      <span class="pill ok">Live</span>
+    </a>
+
+    <a class="navItem {{ 'active' if active=='apps' else '' }}" href="/apps">
+      <div class="navLeft"><span class="navIcon">A</span><span>Приложения</span></div>
+      <span class="pill warn" id="installedCountPill">0</span>
+    </a>
+
+    <a class="navItem {{ 'active' if active=='jobs' else '' }}" href="/jobs">
+      <div class="navLeft"><span class="navIcon">J</span><span>Задачи</span></div>
+      <span class="pill warn" id="jobsCountPill">0</span>
+    </a>
+
+    <a class="navItem {{ 'active' if active=='system' else '' }}" href="/system">
+      <div class="navLeft"><span class="navIcon">S</span><span>Система</span></div>
+      <span class="pill ok">OK</span>
+    </a>
+  </div>
+</aside>

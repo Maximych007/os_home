@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block content %}
+<div id="appRoot" data-appid="{{ appid }}"></div>
+
+<div class="hero">
+  <div>
+    <h2 id="appDetailTitle">Приложение</h2>
+    <p id="appDetailSub" class="muted">—</p>
+  </div>
+  <div class="heroActions">
+    <a class="btn" href="/apps">Назад</a>
+    <button class="btn primary" id="appOpenBtn" type="button">Открыть Web UI</button>
+    <button class="btn" id="appToggleBtn" type="button">Запуск/Стоп</button>
+    <button class="btn" id="appRestartBtn" type="button">Перезапуск</button>
+    <button class="btn danger" id="appRemoveBtn" type="button">Удалить (Down)</button>
+  </div>
+</div>
+
+<div class="card">
+  <div class="tabs" id="appTabs">
+    <div class="tab active" data-tab="overview">Обзор</div>
+    <div class="tab" data-tab="settings">Настройки</div>
+    <div class="tab" data-tab="containers">Контейнеры</div>
+    <div class="tab" data-tab="logs">Логи</div>
+  </div>
+
+  <div id="appTab-overview" style="margin-top:12px">
+    <h3>Сводка</h3>
+    <div class="kvlist" id="appOverviewKv"></div>
+  </div>
+
+  <div id="appTab-settings" class="hide" style="margin-top:12px">
+    <div class="grid two">
+      <div>
+        <h3>ENV</h3>
+        <table>
+          <thead><tr><th>Ключ</th><th>Значение</th></tr></thead>
+          <tbody id="envTable"></tbody>
+        </table>
+      </div>
+      <div>
+        <h3>Порты</h3>
+        <table>
+          <thead><tr><th>Контейнер</th><th>Хост</th><th>Протокол</th></tr></thead>
+          <tbody id="portsTable"></tbody>
+        </table>
+        <div style="margin-top:14px">
+          <h3>Тома</h3>
+          <table>
+            <thead><tr><th>Хост</th><th>Контейнер</th><th>Режим</th></tr></thead>
+            <tbody id="volumesTable"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="appTab-containers" class="hide" style="margin-top:12px">
+    <h3>Контейнеры</h3>
+    <div class="kvlist" id="containersList"></div>
+  </div>
+
+  <div id="appTab-logs" class="hide" style="margin-top:12px">
+    <div class="grid two">
+      <div class="field">
+        <div class="label">Контейнер</div>
+        <select class="select" id="containerSelect"></select>
+      </div>
+      <div class="field">
+        <div class="label">Управление</div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap">
+          <button class="btn" id="logsRefreshBtn" type="button">Обновить</button>
+          <button class="btn primary" id="logsFollowBtn" type="button">Автопрокрутка: ВКЛ</button>
+        </div>
+      </div>
+    </div>
+    <div class="logBox">
+      <pre class="logPre" id="containerLogPre"></pre>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script type="module" src="{{ url_for('static', path='app_detail.js') }}"></script>
+{% endblock %}

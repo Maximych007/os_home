@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="hero">
+  <div>
+    <h2>Приложения</h2>
+    <p>Каталог и управление Docker‑приложениями.</p>
+  </div>
+  <div class="heroActions">
+    <button class="btn primary" id="openInstallModalBtn" type="button">Каталог</button>
+    <button class="btn" id="appsRefreshBtn" type="button">Обновить</button>
+  </div>
+</div>
+
+<div class="appsGrid" id="appsInstalledCards"></div>
+
+<div class="modalWrap" id="installModalWrap" aria-label="Каталог">
+  <div class="modal">
+    <div class="modalHead">
+      <div>
+        <h2 class="modalTitle">Каталог</h2>
+        <div class="modalSub">Установка приложений</div>
+      </div>
+      <div style="display:flex; gap:10px; align-items:center">
+        <button class="iconbtn" id="installCloseBtn" title="Закрыть" type="button">×</button>
+      </div>
+    </div>
+    <div class="modalBody">
+      <div class="search" style="width:100%">
+        <span class="muted">⌕</span>
+        <input id="catalogSearch" placeholder="Поиск в каталоге">
+      </div>
+      <div class="appsGrid" id="catalogGrid" style="margin-top:12px"></div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script type="module" src="{{ url_for('static', path='apps.js') }}"></script>
+{% endblock %}

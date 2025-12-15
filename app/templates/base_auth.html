@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="ru" data-theme="{{ theme or 'dark' }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ServerOS UI</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='serveros.css') }}">
+</head>
+<body>
+
+<div class="modalWrap show" style="display:grid; place-items:center; background: radial-gradient(900px 600px at 20% 0, rgba(110,168,254,.28) 0, rgba(11,18,32,.88) 55%) fixed;">
+  <div class="modal" style="width:min(560px, 94vw)">
+    {% block content %}{% endblock %}
+  </div>
+</div>
+
+</body>
+</html>

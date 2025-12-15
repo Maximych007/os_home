@@ -1,0 +1,43 @@
+{% extends "base_auth.html" %}
+{% block content %}
+<div class="modalHead">
+  <div>
+    <h1 class="modalTitle">ServerOS UI</h1>
+    <div class="modalSub">Первый запуск: создание администратора</div>
+  </div>
+  <div style="display:flex; gap:10px; align-items:center">
+    <button class="iconbtn" id="setupThemeBtn" title="Тема" type="button">☼</button>
+  </div>
+</div>
+
+<div class="modalBody">
+  <div class="kvrow" id="setupError" style="display:none; border-color: rgba(255,107,107,.35); background: rgba(255,107,107,.12)">
+    <span class="kvk">Ошибка</span>
+    <span class="kvv" id="setupErrorText">—</span>
+  </div>
+
+  <form id="setupForm" class="grid" style="gap:12px; margin-top:12px;">
+    <div class="field">
+      <div class="label">Логин администратора</div>
+      <input class="select" name="login" placeholder="admin" autocomplete="username">
+      <div class="muted" style="font-size:12px">Минимум 3 символа</div>
+    </div>
+    <div class="field">
+      <div class="label">Пароль</div>
+      <input class="select" name="password" type="password" placeholder="••••••" autocomplete="new-password">
+      <div class="muted" style="font-size:12px">Минимум 6 символов</div>
+    </div>
+    <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end; align-items:center">
+      <button class="btn primary" type="submit">Создать и войти</button>
+    </div>
+  </form>
+
+  <div class="muted" style="font-size:12px; display:flex; justify-content:space-between; gap:10px; margin-top:12px">
+    <span class="mono">v{{ version }}</span>
+    <span>Docker</span>
+    <span class="pill ok" id="dockerPill">—</span>
+  </div>
+</div>
+
+<script type="module" src="{{ url_for('static', path='setup.js') }}"></script>
+{% endblock %}

@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="hero">
+  <div>
+    <h2>Главная</h2>
+    <p>Метрики + быстрый доступ к установленным сервисам.</p>
+  </div>
+  <div class="heroActions">
+    <button class="btn primary" id="openWidgetsBtnHome" type="button">Виджеты</button>
+  </div>
+</div>
+
+<div class="tiles" id="tiles"></div>
+
+<div class="grid two">
+  <div class="card">
+    <h3>Быстрый запуск</h3>
+    <p>Установленные приложения.</p>
+    <div class="appgrid" id="homeLauncher"></div>
+  </div>
+  <div class="card">
+    <h3>Последние задачи</h3>
+    <p>Install/Start/Stop/Restart/Down.</p>
+    <div class="kvlist" id="jobsPreview"></div>
+  </div>
+</div>
+
+<div class="modalWrap" id="widgetsModalWrap" aria-label="Виджеты">
+  <div class="modal">
+    <div class="modalHead">
+      <div>
+        <h2 class="modalTitle">Виджеты</h2>
+        <div class="modalSub">Перетаскивание и изменение размера</div>
+      </div>
+      <div style="display:flex; gap:10px; align-items:center">
+        <button class="iconbtn" id="widgetsCloseBtn" title="Закрыть" type="button">×</button>
+      </div>
+    </div>
+
+    <div class="modalBody">
+      <div class="widgetBuilder">
+        <div class="palette">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:10px">
+            <div style="font-weight:950">Палитра</div>
+            <span class="pill warn">drag</span>
+          </div>
+          <div class="paletteGrid" id="paletteGrid"></div>
+          <div class="muted" style="font-size:12px; margin-top:10px">
+            Изменения сохраняются автоматически на сервере.
+          </div>
+        </div>
+
+        <div class="canvasWrap">
+          <div class="canvasHead">
+            <div style="font-weight:950">Рабочая область</div>
+            <div class="canvasHint">Сетка 4 колонки • resize справа‑снизу</div>
+          </div>
+          <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px">
+            <button class="btn danger" id="widgetsResetBtn" type="button">Сбросить</button>
+          </div>
+          <div class="canvas" id="widgetCanvas"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script type="module" src="{{ url_for('static', path='home.js') }}"></script>
+{% endblock %}

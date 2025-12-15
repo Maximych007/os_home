@@ -26,13 +26,14 @@ from fastapi.responses import (
     RedirectResponse,
     FileResponse,
     PlainTextResponse,
+    Response,
 )
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
 
-VERSION = "0.5.0"
+VERSION = "0.6.0"
 
 APPDIR = Path(__file__).resolve().parent
 DATADIR = APPDIR / "data"
@@ -40,9 +41,8 @@ DBPATH = DATADIR / "app.db"
 APPSDIR = DATADIR / "apps"
 ICONSDIR = DATADIR / "icons"
 
-SESSIONSECRET = os.environ.get("SERVERUISECRET", "dev-secret-change-me")
+SESSIONSECRET = os.environ.get("SERVER_UI_SECRET", "dev-secret-change-me")
 
-DEFAULTTILESORDER = ["cpu", "ram", "disk", "temp", "uptime", "net"]
 AVAILABLETILES = {
     "cpu": "CPU",
     "ram": "RAM",
@@ -52,7 +52,6 @@ AVAILABLETILES = {
     "net": "Сеть",
 }
 
-# Виджеты (как в твоём 1.html: GRIDCOLS=4, MAXH=2)
 DEFAULT_WIDGETS = ["cpu", "ram", "disk", "temp", "uptime", "net"]
 DEFAULT_LAYOUT = [
     {"key": "cpu", "x": 0, "y": 0, "w": 2, "h": 1},
@@ -122,6 +121,7 @@ APPCATALOG: dict[str, Any] = {
     },
 }
 
+
 app = FastAPI()
 app.add_middleware(SessionMiddleware, secret_key=SESSIONSECRET)
 app.mount("/static", StaticFiles(directory=str(APPDIR / "static")), name="static")
@@ -150,15 +150,6 @@ def initdb() -> None:
         )
         conn.execute(
             """
-            CREATE TABLE IF NOT EXISTS uiconfig (
-              id INTEGER PRIMARY KEY CHECK (id = 1),
-              tilesorder TEXT NOT NULL,
-              updatedat TEXT NOT NULL
-            )
-            """
-        )
-        conn.execute(
-            """
             CREATE TABLE IF NOT EXISTS settings (
               id INTEGER PRIMARY KEY CHECK (id = 1),
               theme TEXT NOT NULL,
@@ -168,9 +159,20 @@ def initdb() -> None:
         )
         conn.execute(
             """
+            CREATE TABLE IF NOT EXISTS widgetsconfig (
+              id INTEGER PRIMARY KEY CHECK (id = 1),
+              widgets TEXT NOT NULL,
+              layout TEXT NOT NULL,
+              updatedat TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS appicons (
               appid TEXT PRIMARY KEY,
               filename TEXT NOT NULL,
+              mimetype TEXT NOT NULL,
               updatedat TEXT NOT NULL
             )
             """
@@ -190,24 +192,6 @@ def initdb() -> None:
             )
             """
         )
-        # Набор/порядок/раскладка виджетов в БД
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS widgetsconfig (
-              id INTEGER PRIMARY KEY CHECK (id = 1),
-              widgets TEXT NOT NULL,
-              layout TEXT NOT NULL,
-              updatedat TEXT NOT NULL
-            )
-            """
-        )
-
-        cur = conn.execute("SELECT id FROM uiconfig WHERE id=1")
-        if cur.fetchone() is None:
-            conn.execute(
-                "INSERT INTO uiconfig(id, tilesorder, updatedat) VALUES(1, ?, ?)",
-                (json.dumps(DEFAULTTILESORDER), datetime.utcnow().isoformat()),
-            )
 
         cur = conn.execute("SELECT id FROM settings WHERE id=1")
         if cur.fetchone() is None:
@@ -234,9 +218,7 @@ def _startup():
 # ---------------- Auth helpers ----------------
 def getsingleuser():
     with db() as conn:
-        return conn.execute(
-            "SELECT id, username, passwordhash, createdat FROM users WHERE id=1"
-        ).fetchone()
+        return conn.execute("SELECT id, username, passwordhash, createdat FROM users WHERE id=1").fetchone()
 
 
 def firstrun() -> bool:
@@ -252,12 +234,6 @@ def createsingleuser(username: str, password: str) -> None:
         )
 
 
-def setpassword(newpassword: str) -> None:
-    pwhash = bcrypt.hashpw(newpassword.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-    with db() as conn:
-        conn.execute("UPDATE users SET passwordhash=? WHERE id=1", (pwhash,))
-
-
 def verifylogin(username: str, password: str) -> bool:
     u = getsingleuser()
     if not u:
@@ -267,32 +243,27 @@ def verifylogin(username: str, password: str) -> bool:
     return bcrypt.checkpw(password.encode("utf-8"), u["passwordhash"].encode("utf-8"))
 
 
+def setpassword(newpassword: str) -> None:
+    pwhash = bcrypt.hashpw(newpassword.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    with db() as conn:
+        conn.execute("UPDATE users SET passwordhash=? WHERE id=1", (pwhash,))
+
+
 def require_auth_api(request: Request) -> JSONResponse | None:
     if not request.session.get("user"):
         return JSONResponse({"ok": False, "error": "unauthorized"}, status_code=401)
     return None
 
 
-# ---------------- UI settings helpers ----------------
-def gettilesorder() -> list[str]:
-    with db() as conn:
-        row = conn.execute("SELECT tilesorder FROM uiconfig WHERE id=1").fetchone()
-    if not row:
-        return DEFAULTTILESORDER
-    try:
-        order = json.loads(row["tilesorder"])
-        if not isinstance(order, list):
-            return DEFAULTTILESORDER
-        out, seen = [], set()
-        for x in order:
-            if isinstance(x, str) and x in AVAILABLETILES and x not in seen:
-                out.append(x)
-                seen.add(x)
-        return out if out else DEFAULTTILESORDER
-    except Exception:
-        return DEFAULTTILESORDER
+def require_auth_page(request: Request) -> RedirectResponse | None:
+    if firstrun():
+        return RedirectResponse(url="/setup", status_code=302)
+    if not request.session.get("user"):
+        return RedirectResponse(url="/login", status_code=302)
+    return None
 
 
+# ---------------- Settings ----------------
 def gettheme() -> str:
     with db() as conn:
         row = conn.execute("SELECT theme FROM settings WHERE id=1").fetchone()
@@ -308,6 +279,7 @@ def settheme(theme: str) -> None:
         )
 
 
+# ---------------- Widgets config ----------------
 def _sanitize_widgets_list(widgets: list[str]) -> list[str]:
     allowed = set(AVAILABLETILES.keys())
     out, seen = [], set()
@@ -320,7 +292,7 @@ def _sanitize_widgets_list(widgets: list[str]) -> list[str]:
 
 def _sanitize_layout(layout: list[dict], widgets: list[str]) -> list[dict]:
     allowed = set(widgets)
-    out = []
+    out: list[dict] = []
     for it in layout:
         if not isinstance(it, dict):
             continue
@@ -339,7 +311,7 @@ def _sanitize_layout(layout: list[dict], widgets: list[str]) -> list[dict]:
         x = max(0, min(4 - w, x))
         y = max(0, y)
         out.append({"key": key, "x": x, "y": y, "w": w, "h": h})
-    # если виджет включён, но в layout его нет — добавим внизу
+
     present = {x["key"] for x in out}
     y_max = 0
     for a in out:
@@ -356,6 +328,7 @@ def get_widgets_config() -> dict[str, Any]:
         row = conn.execute("SELECT widgets, layout FROM widgetsconfig WHERE id=1").fetchone()
     if not row:
         return {"widgets": DEFAULT_WIDGETS, "layout": DEFAULT_LAYOUT}
+
     try:
         widgets = json.loads(row["widgets"])
         layout = json.loads(row["layout"])
@@ -387,7 +360,7 @@ def set_widgets_config(widgets: list[str], layout: list[dict]) -> dict[str, Any]
     return {"widgets": widgets, "layout": layout}
 
 
-# ---------------- Jobs helpers ----------------
+# ---------------- Jobs ----------------
 def createjob(kind: str, appid: str, action: str | None = None) -> str:
     jobid = uuid.uuid4().hex
     now = datetime.utcnow().isoformat()
@@ -436,7 +409,7 @@ def jobsetstatus(jobid: str, status: str, message: str | None = None, started: b
             conn.execute("UPDATE jobs SET status=?, message=? WHERE id=?", (status, message, jobid))
 
 
-def getjobs(limit: int = 20) -> list[dict]:
+def getjobs(limit: int = 50) -> list[dict]:
     with db() as conn:
         rows = conn.execute(
             """
@@ -462,7 +435,7 @@ async def runjobinthread(jobid: str, fn, *args):
         jobsetstatus(jobid, "error", message=str(e), finished=True)
 
 
-# ---------------- Formatting / metrics ----------------
+# ---------------- Metrics ----------------
 def fmt_gb(x_bytes: float) -> str:
     return f"{x_bytes / (1024**3):.1f}"
 
@@ -586,18 +559,16 @@ def tile_net():
 TILE_BUILDERS = {"cpu": tile_cpu, "ram": tile_ram, "disk": tile_disk, "temp": tile_temp, "uptime": tile_uptime, "net": tile_net}
 
 
-def buildtiles(order: list[str] | None = None):
-    if order is None:
-        order = gettilesorder()
+def build_tiles_for_widgets(widgets: list[str]) -> list[dict]:
     tiles = []
-    for tid in order:
-        fn = TILE_BUILDERS.get(tid)
+    for wid in widgets:
+        fn = TILE_BUILDERS.get(wid)
         if fn:
             tiles.append(fn())
     return tiles
 
 
-# ---------------- Docker Engine API layer ----------------
+# ---------------- Docker layer ----------------
 def dockerclient():
     try:
         return docker.from_env()
@@ -650,7 +621,7 @@ def ensuredirsforservice(appid: str, servicespec: dict) -> dict:
 
 
 def findcontainers(client: docker.DockerClient, appid: str):
-    # ВАЖНО: all=True чтобы видеть остановленные контейнеры и не “терять” installed [фикс бага] 
+    # Важно: all=True, чтобы stopped-контейнеры не “пропадали”
     return client.containers.list(all=True, filters={"label": [f"serverui.app={appid}", "serverui.managed=true"]})
 
 
@@ -678,11 +649,13 @@ def installapp(appid: str) -> tuple[bool, str]:
     client = dockerclient()
     if not client:
         return False, "Docker недоступен"
+
     try:
         net = ensurenetwork(client, appid)
         services = meta.get("services") or []
         for svc in services:
             client.images.pull(svc["image"])
+
         for svc in services:
             svcname = svc["name"]
             containername = f"serverui-{appid}-{svcname}"
@@ -734,6 +707,7 @@ def actionapp(appid: str, action: str) -> tuple[bool, str]:
         return False, "Docker недоступен"
     try:
         containers = findcontainers(client, appid)
+
         if action == "start":
             for c in containers:
                 c.start()
@@ -758,29 +732,44 @@ def actionapp(appid: str, action: str) -> tuple[bool, str]:
                 pass
         else:
             return False, "Неизвестное действие"
+
         return True, "OK"
     except DockerException as e:
         return False, str(e)
 
 
-# ---------------- Icons ----------------
-def geticonfilename(appid: str) -> str | None:
+# ---------------- Icons (no static icons folder needed) ----------------
+def _default_icon_svg(appid: str) -> str:
+    letter = (appid[:1] or "A").upper()
+    return f"""<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96">
+<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+<stop offset="0" stop-color="#6ea8fe"/><stop offset="1" stop-color="#7ee787"/></linearGradient></defs>
+<rect x="8" y="8" width="80" height="80" rx="18" fill="url(#g)" opacity="0.22"/>
+<rect x="8" y="8" width="80" height="80" rx="18" fill="none" stroke="rgba(255,255,255,0.25)" />
+<text x="48" y="58" text-anchor="middle" font-family="ui-sans-serif,system-ui,Segoe UI,Roboto,Arial" font-size="40" font-weight="800" fill="rgba(255,255,255,0.92)">{letter}</text>
+</svg>"""
+
+
+def geticonmeta(appid: str) -> tuple[str, str] | None:
     with db() as conn:
-        row = conn.execute("SELECT filename FROM appicons WHERE appid=?", (appid,)).fetchone()
-    return row["filename"] if row else None
+        row = conn.execute("SELECT filename, mimetype FROM appicons WHERE appid=?", (appid,)).fetchone()
+    if not row:
+        return None
+    return row["filename"], row["mimetype"]
 
 
-def seticonfilename(appid: str, filename: str) -> None:
+def seticonmeta(appid: str, filename: str, mimetype: str) -> None:
     with db() as conn:
         conn.execute(
             """
-            INSERT INTO appicons(appid, filename, updatedat)
-            VALUES(?, ?, ?)
+            INSERT INTO appicons(appid, filename, mimetype, updatedat)
+            VALUES(?, ?, ?, ?)
             ON CONFLICT(appid) DO UPDATE SET
               filename=excluded.filename,
+              mimetype=excluded.mimetype,
               updatedat=excluded.updatedat
             """,
-            (appid, filename, datetime.utcnow().isoformat()),
+            (appid, filename, mimetype, datetime.utcnow().isoformat()),
         )
 
 
@@ -790,14 +779,20 @@ def iconurl(appid: str) -> str:
 
 @app.get("/icons/{appid}")
 async def getappicon(appid: str):
-    defaultpath = APPDIR / "static" / "icons" / "default.png"
-    fn = geticonfilename(appid)
-    if not fn:
-        return FileResponse(str(defaultpath))
-    path = ICONSDIR / fn
+    meta = geticonmeta(appid)
+    if not meta:
+        svg = _default_icon_svg(appid)
+        return Response(content=svg, media_type="image/svg+xml")
+
+    filename, mimetype = meta
+    path = ICONSDIR / filename
     if not path.exists():
-        return FileResponse(str(defaultpath))
-    return FileResponse(str(path))
+        svg = _default_icon_svg(appid)
+        return Response(content=svg, media_type="image/svg+xml")
+
+    if mimetype == "image/svg+xml":
+        return Response(content=path.read_text(encoding="utf-8", errors="replace"), media_type="image/svg+xml")
+    return FileResponse(str(path), media_type=mimetype)
 
 
 @app.post("/api/apps/icon")
@@ -809,7 +804,8 @@ async def uploadappicon(request: Request, appid: str = Form(...), file: UploadFi
         return JSONResponse({"ok": False, "error": "not_found"}, status_code=404)
 
     allowed = {"image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp", "image/svg+xml": ".svg"}
-    ext = allowed.get(file.content_type or "")
+    mimetype = file.content_type or ""
+    ext = allowed.get(mimetype)
     if not ext:
         return JSONResponse({"ok": False, "error": "bad_type"}, status_code=400)
 
@@ -817,7 +813,7 @@ async def uploadappicon(request: Request, appid: str = Form(...), file: UploadFi
     outpath = ICONSDIR / safename
     data = await file.read()
     outpath.write_bytes(data)
-    seticonfilename(appid, safename)
+    seticonmeta(appid, safename, mimetype)
     return {"ok": True, "icon_url": iconurl(appid)}
 
 
@@ -837,10 +833,10 @@ def getnetworkinfo():
     return {"hostname": host, "ips": ips}
 
 
-# ---------------- Updates (git-based) ----------------
+# ---------------- Updates (git) ----------------
 def _run_git(args: list[str], cwd: Path) -> tuple[bool, str]:
     if not shutil.which("git"):
-        return False, "git не найден в системе"
+        return False, "git не найден"
     try:
         p = subprocess.run(["git"] + args, cwd=str(cwd), capture_output=True, text=True, timeout=60)
         out = (p.stdout or "") + ("\n" + p.stderr if p.stderr else "")
@@ -849,12 +845,8 @@ def _run_git(args: list[str], cwd: Path) -> tuple[bool, str]:
         return False, str(e)
 
 
-def _repo_root() -> Path:
-    return APPDIR
-
-
 def updates_check() -> dict[str, Any]:
-    root = _repo_root()
+    root = APPDIR
     if not (root / ".git").exists():
         return {"ok": True, "supported": False, "status": "not_git_repo"}
 
@@ -868,7 +860,6 @@ def updates_check() -> dict[str, Any]:
 
     ok, behind = _run_git(["rev-list", "HEAD..@{u}", "--count"], root)
     if not ok:
-        # если upstream не настроен
         return {"ok": True, "supported": True, "status": "no_upstream", "current": head[:12], "log": behind}
 
     try:
@@ -887,7 +878,7 @@ def updates_check() -> dict[str, Any]:
 
 
 def updates_apply() -> dict[str, Any]:
-    root = _repo_root()
+    root = APPDIR
     if not (root / ".git").exists():
         return {"ok": True, "supported": False, "status": "not_git_repo"}
 
@@ -895,29 +886,93 @@ def updates_apply() -> dict[str, Any]:
     if not ok:
         return {"ok": True, "supported": True, "status": "pull_error", "log": out}
 
-    # после pull обычно нужен рестарт процесса вручную (systemd/docker)
     return {"ok": True, "supported": True, "status": "updated", "log": out}
 
 
-# ---------------- Routes (ONLY UI) ----------------
+# ---------------- HTML Pages ----------------
 @app.get("/", response_class=HTMLResponse)
-async def index():
-    return RedirectResponse(url="/ui", status_code=302)
+async def index(request: Request):
+    if firstrun():
+        return RedirectResponse(url="/setup", status_code=302)
+    if not request.session.get("user"):
+        return RedirectResponse(url="/login", status_code=302)
+    return RedirectResponse(url="/home", status_code=302)
 
 
-@app.get("/ui", response_class=HTMLResponse)
-async def ui(request: Request):
+@app.get("/login", response_class=HTMLResponse)
+async def login_page(request: Request):
+    if firstrun():
+        return RedirectResponse(url="/setup", status_code=302)
+    if request.session.get("user"):
+        return RedirectResponse(url="/home", status_code=302)
+    return templates.TemplateResponse("login.html", {"request": request, "theme": gettheme(), "version": VERSION})
+
+
+@app.get("/setup", response_class=HTMLResponse)
+async def setup_page(request: Request):
+    if not firstrun():
+        if request.session.get("user"):
+            return RedirectResponse(url="/home", status_code=302)
+        return RedirectResponse(url="/login", status_code=302)
+    return templates.TemplateResponse("setup.html", {"request": request, "theme": gettheme(), "version": VERSION})
+
+
+@app.get("/home", response_class=HTMLResponse)
+async def home_page(request: Request):
+    redir = require_auth_page(request)
+    if redir:
+        return redir
     return templates.TemplateResponse(
-        "ui.html",
-        {
-            "request": request,
-            "theme": gettheme(),
-            "version": VERSION,
-        },
+        "home.html",
+        {"request": request, "theme": gettheme(), "version": VERSION, "active": "home", "user": request.session.get("user")},
     )
 
 
-# ---------------- API: bootstrap/auth ----------------
+@app.get("/apps", response_class=HTMLResponse)
+async def apps_page(request: Request):
+    redir = require_auth_page(request)
+    if redir:
+        return redir
+    return templates.TemplateResponse(
+        "apps.html",
+        {"request": request, "theme": gettheme(), "version": VERSION, "active": "apps", "user": request.session.get("user")},
+    )
+
+
+@app.get("/apps/{appid}", response_class=HTMLResponse)
+async def app_detail_page(request: Request, appid: str):
+    redir = require_auth_page(request)
+    if redir:
+        return redir
+    return templates.TemplateResponse(
+        "app_detail.html",
+        {"request": request, "theme": gettheme(), "version": VERSION, "active": "apps", "user": request.session.get("user"), "appid": appid},
+    )
+
+
+@app.get("/jobs", response_class=HTMLResponse)
+async def jobs_page(request: Request):
+    redir = require_auth_page(request)
+    if redir:
+        return redir
+    return templates.TemplateResponse(
+        "jobs.html",
+        {"request": request, "theme": gettheme(), "version": VERSION, "active": "jobs", "user": request.session.get("user")},
+    )
+
+
+@app.get("/system", response_class=HTMLResponse)
+async def system_page(request: Request):
+    redir = require_auth_page(request)
+    if redir:
+        return redir
+    return templates.TemplateResponse(
+        "system.html",
+        {"request": request, "theme": gettheme(), "version": VERSION, "active": "system", "user": request.session.get("user")},
+    )
+
+
+# ---------------- API ----------------
 @app.get("/api/bootstrap")
 async def api_bootstrap(request: Request):
     authed = bool(request.session.get("user"))
@@ -929,7 +984,6 @@ async def api_bootstrap(request: Request):
         "theme": gettheme(),
         "version": VERSION,
         "dockerpresent": dockerpresent(),
-        "widgets_config": get_widgets_config() if authed else None,
     }
 
 
@@ -937,15 +991,12 @@ async def api_bootstrap(request: Request):
 async def api_setup(request: Request, payload: dict = Body(...)):
     if not firstrun():
         return JSONResponse({"ok": False, "error": "already_setup"}, status_code=400)
-
     login = str(payload.get("login", "")).strip()
     password = str(payload.get("password", ""))
-
     if len(login) < 3:
         return JSONResponse({"ok": False, "error": "login_short"}, status_code=400)
     if len(password) < 6:
         return JSONResponse({"ok": False, "error": "password_short"}, status_code=400)
-
     createsingleuser(login, password)
     request.session["user"] = login
     return {"ok": True}
@@ -955,13 +1006,10 @@ async def api_setup(request: Request, payload: dict = Body(...)):
 async def api_login(request: Request, payload: dict = Body(...)):
     if firstrun():
         return JSONResponse({"ok": False, "error": "first_run"}, status_code=400)
-
     login = str(payload.get("login", "")).strip()
     password = str(payload.get("password", ""))
-
     if not verifylogin(login, password):
         return JSONResponse({"ok": False, "error": "bad_credentials"}, status_code=401)
-
     request.session["user"] = login
     return {"ok": True}
 
@@ -972,7 +1020,6 @@ async def api_logout(request: Request):
     return {"ok": True}
 
 
-# ---------------- API: theme ----------------
 @app.post("/api/theme")
 async def api_theme(request: Request, payload: dict = Body(...)):
     guard = require_auth_api(request)
@@ -983,7 +1030,6 @@ async def api_theme(request: Request, payload: dict = Body(...)):
     return {"ok": True, "theme": gettheme()}
 
 
-# ---------------- API: widgets config ----------------
 @app.get("/api/widgets/config")
 async def api_widgets_get(request: Request):
     guard = require_auth_api(request)
@@ -1005,24 +1051,24 @@ async def api_widgets_set(request: Request, payload: dict = Body(...)):
     return {"ok": True, "config": cfg}
 
 
-# ---------------- API: tiles/jobs ----------------
 @app.get("/api/tiles")
 async def api_tiles(request: Request):
     guard = require_auth_api(request)
     if guard:
         return guard
-    return {"ok": True, "tiles": buildtiles()}
+    cfg = get_widgets_config()
+    tiles = build_tiles_for_widgets(cfg["widgets"])
+    return {"ok": True, "tiles": tiles}
 
 
 @app.get("/api/jobs")
-async def api_jobs(request: Request, limit: int = 20):
+async def api_jobs(request: Request, limit: int = 50):
     guard = require_auth_api(request)
     if guard:
         return guard
     return {"ok": True, "jobs": getjobs(limit=int(limit))}
 
 
-# ---------------- API: apps ----------------
 def _app_spec_for_ui(appid: str) -> dict[str, Any]:
     meta = APPCATALOG.get(appid) or {}
     services = meta.get("services") or []
@@ -1055,7 +1101,7 @@ async def api_apps(request: Request):
     for appid, meta in APPCATALOG.items():
         st = appstatus(appid)
         containers = st.get("containers") or []
-        installed = bool(st.get("ok") and containers)  # installed если есть контейнеры (даже stopped)
+        installed = bool(st.get("ok") and containers)
         out.append(
             {
                 "id": appid,
@@ -1123,11 +1169,9 @@ async def api_app_action(request: Request, appid: str, payload: dict = Body(...)
         return guard
     if appid not in APPCATALOG:
         return JSONResponse({"ok": False, "error": "not_found"}, status_code=404)
-
     action = str(payload.get("action", "")).strip()
     if action not in ("start", "stop", "restart", "down"):
         return JSONResponse({"ok": False, "error": "bad_action"}, status_code=400)
-
     jobid = createjob("action", appid, action)
     asyncio.create_task(runjobinthread(jobid, actionapp, appid, action))
     return {"ok": True, "jobid": jobid}
@@ -1156,13 +1200,11 @@ async def api_app_logs(
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
 
 
-# ---------------- API: system ----------------
 @app.get("/api/system/info")
 async def api_system_info(request: Request):
     guard = require_auth_api(request)
     if guard:
         return guard
-
     info = {
         "version": VERSION,
         "python": platform.python_version(),
@@ -1177,7 +1219,6 @@ async def api_system_password(request: Request, payload: dict = Body(...)):
     guard = require_auth_api(request)
     if guard:
         return guard
-
     current = str(payload.get("current_password", ""))
     new = str(payload.get("new_password", ""))
 
@@ -1187,7 +1228,6 @@ async def api_system_password(request: Request, payload: dict = Body(...)):
     u = getsingleuser()
     if not u:
         return JSONResponse({"ok": False, "error": "no_user"}, status_code=400)
-
     if not verifylogin(u["username"], current):
         return JSONResponse({"ok": False, "error": "bad_current_password"}, status_code=401)
 
@@ -1244,7 +1284,6 @@ async def api_update_apply(request: Request):
     return updates_apply()
 
 
-# ---------------- Health ----------------
 @app.get("/healthz", response_class=PlainTextResponse)
 async def healthz():
     return "ok"
