@@ -1,0 +1,1415 @@
+<!doctype html>
+<html lang="ru" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ServerOS UI</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='serveros.css') }}">
+</head>
+<body>
+
+<div class="backdrop" id="backdrop"></div>
+
+<!-- Экран входа / первый запуск -->
+<div class="modalWrap show" id="loginScreen" style="display:grid; place-items:center; background: radial-gradient(900px 600px at 20% 0, rgba(110,168,254,.28) 0, rgba(11,18,32,.88) 55%) fixed;">
+  <div class="modal" style="width:min(560px, 94vw)">
+    <div class="modalHead">
+      <div>
+        <h1 class="modalTitle">ServerOS UI</h1>
+        <div class="modalSub" id="loginSubtitle">Вход</div>
+      </div>
+      <div style="display:flex; gap:10px; align-items:center">
+        <button class="iconbtn" id="loginThemeBtn" title="Тема" type="button">☼</button>
+      </div>
+    </div>
+
+    <div class="modalBody">
+      <div class="kvrow" id="loginError" style="display:none; border-color: rgba(255,107,107,.35); background: rgba(255,107,107,.12)">
+        <span class="kvk">Ошибка</span>
+        <span class="kvv" id="loginErrorText">—</span>
+      </div>
+
+      <!-- Первый запуск -->
+      <form id="setupForm" class="grid" style="gap:12px; margin-top:12px; display:none;">
+        <div class="field">
+          <div class="label">Логин администратора</div>
+          <input class="select" name="login" placeholder="admin" autocomplete="username">
+          <div class="muted" style="font-size:12px">Минимум 3 символа</div>
+        </div>
+        <div class="field">
+          <div class="label">Пароль</div>
+          <input class="select" name="password" type="password" placeholder="••••••" autocomplete="new-password">
+          <div class="muted" style="font-size:12px">Минимум 6 символов</div>
+        </div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end; align-items:center">
+          <button class="btn primary" type="submit">Создать и войти</button>
+        </div>
+      </form>
+
+      <!-- Вход -->
+      <form id="loginForm" class="grid" style="gap:12px; margin-top:12px; display:none;">
+        <div class="field">
+          <div class="label">Логин</div>
+          <input class="select" name="login" placeholder="admin" autocomplete="username">
+        </div>
+        <div class="field">
+          <div class="label">Пароль</div>
+          <input class="select" name="password" type="password" placeholder="••••••" autocomplete="current-password">
+        </div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end; align-items:center">
+          <button class="btn primary" type="submit">Войти</button>
+        </div>
+      </form>
+
+      <div class="muted" style="font-size:12px; display:flex; justify-content:space-between; gap:10px; margin-top:12px">
+        <span class="mono" id="verPill">v{{ version }}</span>
+        <span>Docker</span>
+        <span class="pill ok" id="dockerPill">—</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Основное приложение -->
+<div class="shell" id="appShell" style="display:none;">
+  <aside class="sidebar" id="sidebar">
+    <div class="brandBox">
+      <div>
+        <div class="brandBoxname">ServerOS</div>
+        <div class="brandBoxsub">Панель управления</div>
+      </div>
+      <div class="pill ok mono" id="versionBadge">v{{ version }}</div>
+    </div>
+
+    <div class="nav" id="nav">
+      <div class="navItem active" data-view="home">
+        <div class="navLeft"><span class="navIcon">H</span><span>Главная</span></div>
+        <span class="pill ok">Live</span>
+      </div>
+      <div class="navItem" data-view="apps">
+        <div class="navLeft"><span class="navIcon">A</span><span>Приложения</span></div>
+        <span class="pill warn" id="installedCountPill">0</span>
+      </div>
+      <div class="navItem" data-view="jobs">
+        <div class="navLeft"><span class="navIcon">J</span><span>Задачи</span></div>
+        <span class="pill warn" id="jobsCountPill">0</span>
+      </div>
+      <div class="navItem" data-view="system">
+        <div class="navLeft"><span class="navIcon">S</span><span>Система</span></div>
+        <span class="pill ok" id="sysOkPill">OK</span>
+      </div>
+      <!-- Кнопки "Выход" НЕТ -->
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div class="topbarleft">
+        <button class="iconbtn" id="menuBtn" title="Меню" type="button">≡</button>
+        <span class="pill ok mono" id="sessionPill">—</span>
+        <span class="pill ok" id="dockerOkPill">Docker</span>
+        <div class="search" title="Поиск по приложениям">
+          <span class="muted">⌕</span>
+          <input id="globalSearch" placeholder="Поиск по приложениям">
+        </div>
+      </div>
+      <div class="topbarright">
+        <button class="iconbtn" id="topThemeBtn" title="Тема" type="button">☼</button>
+      </div>
+    </header>
+
+    <div class="container">
+      <!-- ГЛАВНАЯ -->
+      <section id="view-home">
+        <div class="hero">
+          <div>
+            <h2>Дашборд</h2>
+            <p>Метрики + быстрый доступ к установленным сервисам.</p>
+          </div>
+          <div class="heroActions">
+            <button class="btn primary" id="openWidgetsBtnHome" type="button">Виджеты</button>
+          </div>
+        </div>
+
+        <div class="tiles" id="tiles"></div>
+
+        <div class="grid two">
+          <div class="card">
+            <h3>Быстрый запуск</h3>
+            <p>Установленные приложения.</p>
+            <div class="appgrid" id="homeLauncher"></div>
+          </div>
+          <div class="card">
+            <h3>Последние задачи</h3>
+            <p>Install/Start/Stop/Restart/Down.</p>
+            <div class="kvlist" id="jobsPreview"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ПРИЛОЖЕНИЯ -->
+      <section id="view-apps" class="hide">
+        <div class="hero">
+          <div>
+            <h2>Приложения</h2>
+            <p>Каталог и управление Docker‑приложениями.</p>
+          </div>
+          <div class="heroActions">
+            <button class="btn primary" id="openInstallModalBtn" type="button">Каталог</button>
+            <button class="btn" id="appsRefreshBtn" type="button">Обновить</button>
+          </div>
+        </div>
+
+        <div class="appsGrid" id="appsInstalledCards"></div>
+      </section>
+
+      <!-- ДЕТАЛИ ПРИЛОЖЕНИЯ -->
+      <section id="view-appdetail" class="hide">
+        <div class="hero">
+          <div>
+            <h2 id="appDetailTitle">Приложение</h2>
+            <p id="appDetailSub" class="muted">—</p>
+          </div>
+          <div class="heroActions">
+            <button class="btn" id="backToAppsBtn" type="button">Назад</button>
+            <button class="btn primary" id="appOpenBtn" type="button">Открыть Web UI</button>
+            <button class="btn" id="appToggleBtn" type="button">Запуск/Стоп</button>
+            <button class="btn" id="appRestartBtn" type="button">Перезапуск</button>
+            <button class="btn danger" id="appRemoveBtn" type="button">Удалить (Down)</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="tabs" id="appTabs">
+            <div class="tab active" data-tab="overview">Обзор</div>
+            <div class="tab" data-tab="settings">Настройки</div>
+            <div class="tab" data-tab="containers">Контейнеры</div>
+            <div class="tab" data-tab="logs">Логи</div>
+          </div>
+
+          <div id="appTab-overview" style="margin-top:12px">
+            <h3>Сводка</h3>
+            <div class="kvlist" id="appOverviewKv"></div>
+          </div>
+
+          <div id="appTab-settings" class="hide" style="margin-top:12px">
+            <div class="grid two">
+              <div>
+                <h3>ENV</h3>
+                <table>
+                  <thead><tr><th>Ключ</th><th>Значение</th></tr></thead>
+                  <tbody id="envTable"></tbody>
+                </table>
+              </div>
+              <div>
+                <h3>Порты</h3>
+                <table>
+                  <thead><tr><th>Контейнер</th><th>Хост</th><th>Протокол</th></tr></thead>
+                  <tbody id="portsTable"></tbody>
+                </table>
+                <div style="margin-top:14px">
+                  <h3>Тома</h3>
+                  <table>
+                    <thead><tr><th>Хост</th><th>Контейнер</th><th>Режим</th></tr></thead>
+                    <tbody id="volumesTable"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div id="appTab-containers" class="hide" style="margin-top:12px">
+            <h3>Контейнеры</h3>
+            <div class="kvlist" id="containersList"></div>
+          </div>
+
+          <div id="appTab-logs" class="hide" style="margin-top:12px">
+            <div class="grid two">
+              <div class="field">
+                <div class="label">Контейнер</div>
+                <select class="select" id="containerSelect"></select>
+              </div>
+              <div class="field">
+                <div class="label">Управление</div>
+                <div style="display:flex; gap:10px; flex-wrap:wrap">
+                  <button class="btn" id="logsRefreshBtn" type="button">Обновить</button>
+                  <button class="btn primary" id="logsFollowBtn" type="button">Автопрокрутка: ВКЛ</button>
+                </div>
+              </div>
+            </div>
+            <div class="logBox">
+              <pre class="logPre" id="containerLogPre"></pre>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ЗАДАЧИ -->
+      <section id="view-jobs" class="hide">
+        <div class="hero">
+          <div>
+            <h2>Задачи</h2>
+            <p>Очередь задач (install/action).</p>
+          </div>
+        </div>
+        <div class="card">
+          <h3>Все задачи</h3>
+          <div class="kvlist" id="jobsFull"></div>
+        </div>
+      </section>
+
+      <!-- СИСТЕМА -->
+      <section id="view-system" class="hide">
+        <div class="hero">
+          <div>
+            <h2>Система</h2>
+            <p>Обновления, пароль, бэкап.</p>
+          </div>
+          <div class="heroActions">
+            <button class="btn" id="checkUpdBtn" type="button">Проверить обновления</button>
+            <button class="btn primary" id="doUpdBtn" type="button" disabled>Обновить</button>
+            <button class="btn" id="backupBtn" type="button">Backup</button>
+          </div>
+        </div>
+
+        <div class="grid two">
+          <div class="card">
+            <h3>Обновления</h3>
+            <div class="kvlist">
+              <div class="kvrow"><span class="kvk">Текущая версия</span><span class="kvv mono" id="curVer">v{{ version }}</span></div>
+              <div class="kvrow"><span class="kvk">Статус</span><span class="kvv" id="updStatus"><span class="pill warn">не проверено</span></span></div>
+              <div class="kvrow"><span class="kvk">Поддержка</span><span class="kvv mono" id="updSupported">—</span></div>
+              <div class="kvrow"><span class="kvk">Отставание</span><span class="kvv mono" id="updBehind">—</span></div>
+            </div>
+            <div class="logBox" style="margin-top:12px">
+              <pre class="logPre" id="updLog"></pre>
+            </div>
+            <div class="muted" style="font-size:12px; margin-top:10px">
+              Если обновление применилось — обычно нужен ручной перезапуск сервиса (systemd/docker).
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>Смена пароля</h3>
+            <div class="field">
+              <div class="label">Текущий пароль</div>
+              <input class="select" id="curPass" type="password" autocomplete="current-password">
+            </div>
+            <div class="field" style="margin-top:10px">
+              <div class="label">Новый пароль</div>
+              <input class="select" id="newPass" type="password" autocomplete="new-password">
+            </div>
+            <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:12px">
+              <button class="btn primary" id="savePassBtn" type="button">Сохранить</button>
+            </div>
+
+            <hr class="hr">
+
+            <h3>Информация</h3>
+            <div class="kvlist" id="sysInfoKv"></div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<!-- Каталог (установка) -->
+<div class="modalWrap" id="installModalWrap" aria-label="Каталог">
+  <div class="modal">
+    <div class="modalHead">
+      <div>
+        <h2 class="modalTitle">Каталог</h2>
+        <div class="modalSub">Установка приложений</div>
+      </div>
+      <div style="display:flex; gap:10px; align-items:center">
+        <button class="iconbtn" id="installCloseBtn" title="Закрыть" type="button">×</button>
+      </div>
+    </div>
+    <div class="modalBody">
+      <div class="search" style="width:100%">
+        <span class="muted">⌕</span>
+        <input id="catalogSearch" placeholder="Поиск в каталоге">
+      </div>
+      <div class="appsGrid" id="catalogGrid" style="margin-top:12px"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Виджеты -->
+<div class="modalWrap" id="widgetsModalWrap" aria-label="Виджеты">
+  <div class="modal">
+    <div class="modalHead">
+      <div>
+        <h2 class="modalTitle">Виджеты</h2>
+        <div class="modalSub">Перетаскивание и изменение размера</div>
+      </div>
+      <div style="display:flex; gap:10px; align-items:center">
+        <button class="iconbtn" id="widgetsCloseBtn" title="Закрыть" type="button">×</button>
+      </div>
+    </div>
+
+    <div class="modalBody">
+      <div class="widgetBuilder">
+        <div class="palette">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:10px">
+            <div style="font-weight:950">Палитра</div>
+            <span class="pill warn">drag</span>
+          </div>
+          <div class="paletteGrid" id="paletteGrid"></div>
+          <div class="muted" style="font-size:12px; margin-top:10px">
+            Изменения сохраняются автоматически на сервере.
+          </div>
+        </div>
+
+        <div class="canvasWrap">
+          <div class="canvasHead">
+            <div style="font-weight:950">Рабочая область</div>
+            <div class="canvasHint">Сетка 4 колонки • resize справа‑снизу</div>
+          </div>
+          <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px">
+            <button class="btn danger" id="widgetsResetBtn" type="button">Сбросить</button>
+          </div>
+          <div class="canvas" id="widgetCanvas"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const $  = (s, r=document) => r.querySelector(s);
+const $$ = (s, r=document) => Array.from(r.querySelectorAll(s));
+
+async function api(url, {method="GET", json=null}={}) {
+  const init = { method, headers: {"Accept":"application/json"} };
+  if (json !== null) {
+    init.headers["Content-Type"] = "application/json";
+    init.body = JSON.stringify(json);
+  }
+  const r = await fetch(url, init);
+  let data = null;
+  try { data = await r.json(); } catch {}
+  return { r, data };
+}
+function clamp(min, max, v){ return Math.max(min, Math.min(max, v)); }
+
+// DOM
+const loginScreen = $("#loginScreen");
+const loginSubtitle = $("#loginSubtitle");
+const loginForm = $("#loginForm");
+const setupForm = $("#setupForm");
+const loginError = $("#loginError");
+const loginErrorText = $("#loginErrorText");
+const dockerPill = $("#dockerPill");
+
+const appShell = $("#appShell");
+const sidebar = $("#sidebar");
+const backdrop = $("#backdrop");
+const menuBtn = $("#menuBtn");
+
+const tilesWrap = $("#tiles");
+const homeLauncher = $("#homeLauncher");
+
+const installedCountPill = $("#installedCountPill");
+const appsInstalledCards = $("#appsInstalledCards");
+const appsRefreshBtn = $("#appsRefreshBtn");
+
+const jobsPreview = $("#jobsPreview");
+const jobsFull = $("#jobsFull");
+const jobsCountPill = $("#jobsCountPill");
+
+const installModalWrap = $("#installModalWrap");
+const openInstallModalBtn = $("#openInstallModalBtn");
+const installCloseBtn = $("#installCloseBtn");
+const catalogGrid = $("#catalogGrid");
+const catalogSearch = $("#catalogSearch");
+
+const widgetsModalWrap = $("#widgetsModalWrap");
+const openWidgetsBtnHome = $("#openWidgetsBtnHome");
+const widgetsCloseBtn = $("#widgetsCloseBtn");
+const widgetsResetBtn = $("#widgetsResetBtn");
+const paletteGrid = $("#paletteGrid");
+const widgetCanvas = $("#widgetCanvas");
+
+const sessionPill = $("#sessionPill");
+const dockerOkPill = $("#dockerOkPill");
+const globalSearch = $("#globalSearch");
+
+const appDetailTitle = $("#appDetailTitle");
+const appDetailSub = $("#appDetailSub");
+const appOpenBtn = $("#appOpenBtn");
+const appToggleBtn = $("#appToggleBtn");
+const appRestartBtn = $("#appRestartBtn");
+const appRemoveBtn = $("#appRemoveBtn");
+const backToAppsBtn = $("#backToAppsBtn");
+
+const appTabs = $("#appTabs");
+const appOverviewKv = $("#appOverviewKv");
+const envTable = $("#envTable");
+const portsTable = $("#portsTable");
+const volumesTable = $("#volumesTable");
+const containersList = $("#containersList");
+const containerSelect = $("#containerSelect");
+const logsRefreshBtn = $("#logsRefreshBtn");
+const logsFollowBtn = $("#logsFollowBtn");
+const containerLogPre = $("#containerLogPre");
+
+const sysInfoKv = $("#sysInfoKv");
+const curPass = $("#curPass");
+const newPass = $("#newPass");
+const savePassBtn = $("#savePassBtn");
+const backupBtn = $("#backupBtn");
+
+const checkUpdBtn = $("#checkUpdBtn");
+const doUpdBtn = $("#doUpdBtn");
+const updStatus = $("#updStatus");
+const updLog = $("#updLog");
+const updSupported = $("#updSupported");
+const updBehind = $("#updBehind");
+
+$("#topThemeBtn").addEventListener("click", toggleTheme);
+$("#loginThemeBtn").addEventListener("click", toggleTheme);
+
+// Каталог виджетов (ключи должны совпадать с AVAILABLETILES /api/tiles)
+const WIDGETCATALOG = [
+  {id:"cpu", title:"CPU", desc:"Нагрузка процессора", defaultW:2, defaultH:1},
+  {id:"ram", title:"RAM", desc:"Оперативная память", defaultW:2, defaultH:1},
+  {id:"disk", title:"Диск", desc:"Хранилище", defaultW:4, defaultH:1},
+  {id:"temp", title:"Температура", desc:"Температура CPU", defaultW:2, defaultH:1},
+  {id:"uptime", title:"Аптайм", desc:"Время работы", defaultW:2, defaultH:1},
+  {id:"net", title:"Сеть", desc:"Трафик", defaultW:4, defaultH:1},
+];
+
+const GRIDCOLS = 4;
+const MAXH = 2;
+
+const state = {
+  firstRun:false,
+  authed:false,
+  user:null,
+  theme:"dark",
+  version:"",
+  dockerpresent:false,
+
+  tilesMap:{},
+
+  appsAll:[],        // всегда полный список (фикс бага “пропадают остановленные”)
+  appsView:[],       // отфильтрованный для UI (по поиску)
+  jobs:[],
+
+  currentAppId:null,
+  logsFollow:true,
+
+  widgets:[],        // набор + порядок
+  layout:[],         // раскладка
+
+  saveTimer:null,    // debounce автосохранения
+};
+
+function setTheme(theme){
+  document.documentElement.setAttribute("data-theme", theme || "dark");
+}
+async function toggleTheme(){
+  const cur = document.documentElement.getAttribute("data-theme") || "dark";
+  const next = (cur === "dark") ? "light" : "dark";
+  setTheme(next);
+  if (state.authed) await api("/api/theme", {method:"POST", json:{theme: next}});
+}
+
+// Навигация
+function showView(name){
+  ["home","apps","appdetail","jobs","system"].forEach(n=>{
+    const el = $("#view-"+n);
+    if (el) el.classList.toggle("hide", n !== name);
+  });
+  $$(".navItem").forEach(i=>{
+    if (!i.dataset.view) return;
+    i.classList.toggle("active", i.dataset.view === name);
+  });
+}
+
+function openMobileMenu(){ sidebar.classList.add("open"); backdrop.classList.add("show"); }
+function closeMobileMenu(){ sidebar.classList.remove("open"); backdrop.classList.remove("show"); }
+menuBtn.addEventListener("click", ()=> sidebar.classList.contains("open") ? closeMobileMenu() : openMobileMenu());
+backdrop.addEventListener("click", closeMobileMenu);
+
+$("#nav").addEventListener("click", (e)=>{
+  const item = e.target.closest(".navItem");
+  if (!item || !item.dataset.view) return;
+  showView(item.dataset.view);
+  closeMobileMenu();
+  if (item.dataset.view === "system") refreshSystemInfo();
+});
+
+// ---------------- Виджеты (layout engine) ----------------
+function clampW(w){ return clamp(1, GRIDCOLS, Math.round(w)); }
+function clampH(h){ return clamp(1, MAXH, Math.round(h)); }
+function rectsOverlap(a,b){ return !(a.x+a.w<=b.x || b.x+b.w<=a.x || a.y+a.h<=b.y || b.y+b.h<=a.y); }
+function within(it){ return it.x>=0 && it.y>=0 && it.w>=1 && it.h>=1 && (it.x+it.w)<=GRIDCOLS; }
+
+function packLayout(items, preferredKey=null){
+  const out = [];
+  const input = items.map(x=>({
+    key:x.key, x:Math.max(0,x.x|0), y:Math.max(0,x.y|0),
+    w:clampW(x.w ?? 2), h:clampH(x.h ?? 1),
+  }));
+
+  input.sort((a,b)=>{
+    if (preferredKey){
+      if (a.key===preferredKey && b.key!==preferredKey) return -1;
+      if (b.key===preferredKey && a.key!==preferredKey) return 1;
+    }
+    return (a.y-b.y) || (a.x-b.x);
+  });
+
+  for (const it0 of input){
+    const it = {...it0};
+    it.w = clampW(it.w); it.h = clampH(it.h);
+    it.x = clamp(0, GRIDCOLS-it.w, it.x);
+
+    while (true){
+      if (!within(it)) it.x = clamp(0, GRIDCOLS-it.w, it.x);
+      let collide = false;
+      for (const placed of out){
+        if (rectsOverlap(it, placed)) { collide=true; break; }
+      }
+      if (!collide) break;
+      it.y += 1;
+    }
+    out.push(it);
+  }
+
+  out.sort((a,b)=>(a.y-b.y)||(a.x-b.x));
+  return out;
+}
+
+function computeOrderFromLayout(){
+  return [...state.layout]
+    .sort((a,b)=>(a.y-b.y)||(a.x-b.x))
+    .map(x=>x.key);
+}
+
+function scheduleWidgetsSave(){
+  if (state.saveTimer) clearTimeout(state.saveTimer);
+  state.saveTimer = setTimeout(async ()=>{
+    state.widgets = computeOrderFromLayout();
+    await api("/api/widgets/config", {method:"POST", json:{widgets: state.widgets, layout: state.layout}});
+    state.saveTimer = null;
+  }, 500);
+}
+
+// Palette/Canvas
+function renderPalette(){
+  paletteGrid.innerHTML = "";
+  for (const w of WIDGETCATALOG){
+    const has = state.widgets.includes(w.id);
+    const el = document.createElement("div");
+    el.className = "pItem";
+    el.draggable = true;
+    el.dataset.wid = w.id;
+    el.innerHTML = `
+      <div style="min-width:0">
+        <div class="pTitle">${w.title}</div>
+        <div class="pDesc">${w.desc}</div>
+      </div>
+      <span class="pill ${has ? "ok":"warn"} pBadge">${has ? "добавлен":"добавить"}</span>
+    `;
+    el.addEventListener("dragstart", (e)=>{
+      e.dataTransfer.setData("text/plain", JSON.stringify({type:"palette", key:w.id}));
+      e.dataTransfer.effectAllowed = "copy";
+    });
+    paletteGrid.appendChild(el);
+  }
+}
+
+function renderCanvas(){
+  widgetCanvas.innerHTML = "";
+  if (!state.layout.length){
+    widgetCanvas.innerHTML = `<div class="muted" style="grid-column:1/-1; padding:10px">Пусто. Перетащи виджет из палитры.</div>`;
+    return;
+  }
+
+  for (const item of state.layout){
+    const meta = WIDGETCATALOG.find(w=>w.id===item.key);
+    const card = document.createElement("div");
+    card.className = "wCard";
+    card.dataset.key = item.key;
+    card.style.gridColumn = `${item.x+1} / span ${item.w}`;
+    card.style.gridRow = `${item.y+1} / span ${item.h}`;
+    card.innerHTML = `
+      <div class="wTop">
+        <div style="min-width:0">
+          <div class="wName">${meta ? meta.title : item.key}</div>
+          <div class="wMini">${meta ? meta.desc : ""}</div>
+        </div>
+        <div class="wBtns">
+          <button class="wX" title="Удалить" type="button">×</button>
+        </div>
+      </div>
+      <div class="wResize" title="Resize"></div>
+    `;
+
+    card.querySelector(".wX").addEventListener("click", (e)=>{
+      e.stopPropagation();
+      state.widgets = state.widgets.filter(x=>x!==item.key);
+      state.layout = state.layout.filter(x=>x.key!==item.key);
+      state.layout = packLayout(state.layout);
+      renderPalette(); renderCanvas(); renderHomeTiles();
+      scheduleWidgetsSave();
+    });
+
+    card.addEventListener("pointerdown", (e)=>{
+      if (e.target.closest(".wX")) return;
+      if (e.target.closest(".wResize")) return;
+      startDragMove(e, item.key);
+    });
+
+    card.querySelector(".wResize").addEventListener("pointerdown", (e)=>{
+      e.stopPropagation();
+      startDragResize(e, item.key);
+    });
+
+    widgetCanvas.appendChild(card);
+  }
+}
+
+function bindCanvasDrop(){
+  widgetCanvas.addEventListener("dragover", (e)=>{
+    e.preventDefault();
+    widgetCanvas.classList.add("dropGlow");
+  });
+  widgetCanvas.addEventListener("dragleave", ()=> widgetCanvas.classList.remove("dropGlow"));
+  widgetCanvas.addEventListener("drop", (e)=>{
+    e.preventDefault();
+    widgetCanvas.classList.remove("dropGlow");
+
+    let payload=null;
+    try { payload = JSON.parse(e.dataTransfer.getData("text/plain")||"null"); } catch {}
+    if (!payload || payload.type !== "palette") return;
+
+    const key = payload.key;
+    if (state.widgets.includes(key)) return;
+
+    const meta = WIDGETCATALOG.find(w=>w.id===key);
+    const w = meta?.defaultW ?? 2;
+    const h = meta?.defaultH ?? 1;
+
+    state.widgets.push(key);
+    state.layout.push({key, x:0, y:0, w, h});
+    state.layout = packLayout(state.layout, key);
+
+    renderPalette(); renderCanvas(); renderHomeTiles();
+    scheduleWidgetsSave();
+  });
+}
+
+function getGridMetrics(canvasEl){
+  const r = canvasEl.getBoundingClientRect();
+  const cs = getComputedStyle(canvasEl);
+  const gap = parseFloat(cs.gap || "14");
+  const padL = parseFloat(cs.paddingLeft || "0");
+  const padT = parseFloat(cs.paddingTop || "0");
+  const padR = parseFloat(cs.paddingRight || "0");
+  const innerW = r.width - padL - padR;
+  const colW = (innerW - gap*(GRIDCOLS-1)) / GRIDCOLS;
+  const rowH = parseFloat(cs.gridAutoRows || "92");
+  return {r, gap, padL, padT, colW, rowH};
+}
+function pointToCell(canvasEl, clientX, clientY){
+  const m = getGridMetrics(canvasEl);
+  const x0 = clientX - m.r.left - m.padL;
+  const y0 = clientY - m.r.top - m.padT;
+  const stepX = m.colW + m.gap;
+  const stepY = m.rowH + m.gap;
+  const gx = Math.floor((x0 + m.colW*0.5) / stepX);
+  const gy = Math.floor((y0 + m.rowH*0.5) / stepY);
+  return {x: clamp(0, GRIDCOLS-1, gx), y: Math.max(0, gy)};
+}
+function makeGhost(canvasEl, item){
+  const ghost = document.createElement("div");
+  ghost.className = "wGhost";
+  ghost.style.gridColumn = `${item.x+1} / span ${item.w}`;
+  ghost.style.gridRow = `${item.y+1} / span ${item.h}`;
+  canvasEl.appendChild(ghost);
+  return ghost;
+}
+
+function startDragMove(e, key){
+  const canvas = widgetCanvas;
+  const card = $(`.wCard[data-key="${CSS.escape(key)}"]`, canvas);
+  if (!card) return;
+
+  const item = state.layout.find(x=>x.key===key);
+  const drag = {active:true, pointerId:e.pointerId, startX:e.clientX, startY:e.clientY, ghostEl:makeGhost(canvas, item)};
+
+  card.setPointerCapture(e.pointerId);
+  card.classList.add("dragging");
+  card.style.zIndex = 30;
+
+  const onMove = (ev)=>{
+    if (!drag.active) return;
+    const dx = ev.clientX - drag.startX;
+    const dy = ev.clientY - drag.startY;
+    card.style.transform = `translate(${dx}px, ${dy}px)`;
+
+    const cell = pointToCell(canvas, ev.clientX, ev.clientY);
+    const cur = state.layout.find(x=>x.key===key);
+    const target = {...cur, x: clamp(0, GRIDCOLS-cur.w, cell.x), y: cell.y};
+    if (cur.x===target.x && cur.y===target.y) return;
+
+    const candidate = state.layout.map(x=>x.key===key ? target : {...x});
+    state.layout = packLayout(candidate, key);
+
+    const pk = state.layout.find(x=>x.key===key);
+    drag.ghostEl.style.gridColumn = `${pk.x+1} / span ${pk.w}`;
+    drag.ghostEl.style.gridRow = `${pk.y+1} / span ${pk.h}`;
+
+    for (const it of state.layout){
+      const c = $(`.wCard[data-key="${CSS.escape(it.key)}"]`, canvas);
+      if (!c || it.key===key) continue;
+      c.style.gridColumn = `${it.x+1} / span ${it.w}`;
+      c.style.gridRow = `${it.y+1} / span ${it.h}`;
+    }
+  };
+
+  const onUp = ()=>{
+    if (!drag.active) return;
+    drag.active = false;
+    card.classList.remove("dragging");
+    card.style.transform = "";
+    card.style.zIndex = "";
+    try { card.releasePointerCapture(drag.pointerId); } catch {}
+    drag.ghostEl.remove();
+    renderPalette(); renderCanvas(); renderHomeTiles();
+    scheduleWidgetsSave();
+    window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("pointerup", onUp);
+  };
+
+  window.addEventListener("pointermove", onMove);
+  window.addEventListener("pointerup", onUp);
+}
+
+function startDragResize(e, key){
+  const canvas = widgetCanvas;
+  const card = $(`.wCard[data-key="${CSS.escape(key)}"]`, canvas);
+  if (!card) return;
+
+  const base = state.layout.find(x=>x.key===key);
+  if (!base) return;
+
+  const drag = {active:true, pointerId:e.pointerId, startX:e.clientX, startY:e.clientY, ghostEl:makeGhost(canvas, base)};
+  card.setPointerCapture(e.pointerId);
+  card.classList.add("dragging");
+  card.style.zIndex = 30;
+
+  const m = getGridMetrics(canvas);
+  const stepX = m.colW + m.gap;
+  const stepY = m.rowH + m.gap;
+
+  const onMove = (ev)=>{
+    if (!drag.active) return;
+    const dx = ev.clientX - drag.startX;
+    const dy = ev.clientY - drag.startY;
+    const wStep = Math.round(dx / stepX);
+    const hStep = Math.round(dy / stepY);
+
+    const cur = state.layout.find(x=>x.key===key);
+    let newW = clampW(cur.w + wStep);
+    let newH = clampH(cur.h + hStep);
+    const newX = clamp(0, GRIDCOLS - newW, cur.x);
+
+    const target = {...cur, x:newX, w:newW, h:newH};
+    const candidate = state.layout.map(x=>x.key===key ? target : {...x});
+    state.layout = packLayout(candidate, key);
+
+    const pk = state.layout.find(x=>x.key===key);
+    drag.ghostEl.style.gridColumn = `${pk.x+1} / span ${pk.w}`;
+    drag.ghostEl.style.gridRow = `${pk.y+1} / span ${pk.h}`;
+
+    for (const it of state.layout){
+      const c = $(`.wCard[data-key="${CSS.escape(it.key)}"]`, canvas);
+      if (!c || it.key===key) continue;
+      c.style.gridColumn = `${it.x+1} / span ${it.w}`;
+      c.style.gridRow = `${it.y+1} / span ${it.h}`;
+    }
+  };
+
+  const onUp = ()=>{
+    if (!drag.active) return;
+    drag.active = false;
+    card.classList.remove("dragging");
+    card.style.zIndex = "";
+    try { card.releasePointerCapture(drag.pointerId); } catch {}
+    drag.ghostEl.remove();
+    renderPalette(); renderCanvas(); renderHomeTiles();
+    scheduleWidgetsSave();
+    window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("pointerup", onUp);
+  };
+
+  window.addEventListener("pointermove", onMove);
+  window.addEventListener("pointerup", onUp);
+}
+
+function tileSpanClass(w){ return w===1?"w1":w===2?"w2":w===3?"w3":"w4"; }
+function tileHeightClass(h){ return h===2?"h2":"h1"; }
+
+function renderHomeTiles(){
+  tilesWrap.innerHTML = "";
+  const sorted = [...state.layout].sort((a,b)=>(a.y-b.y)||(a.x-b.x));
+  if (!sorted.length){
+    tilesWrap.innerHTML = `<div class="muted">Виджеты не настроены.</div>`;
+    return;
+  }
+
+  for (const item of sorted){
+    const meta = WIDGETCATALOG.find(w=>w.id===item.key);
+    const d = state.tilesMap[item.key] || {value:"—", unit:"", sub:"", pct:null};
+    const el = document.createElement("div");
+    el.className = `tile ${tileSpanClass(item.w)} ${tileHeightClass(item.h)}`;
+    el.innerHTML = `
+      <div class="tileHead"><div class="tileTitle"></div><div></div></div>
+      <div class="tileValue"><div class="tileNumber"></div><div class="tileUnit"></div></div>
+      <div class="tileSub"></div>
+      <div class="bar" style="display:none"><div class="barFill"></div></div>
+    `;
+    el.querySelector(".tileTitle").textContent = meta ? meta.title : item.key;
+    el.querySelector(".tileNumber").textContent = d.value ?? "—";
+    el.querySelector(".tileUnit").textContent = d.unit ?? "";
+    el.querySelector(".tileSub").textContent = d.sub ?? "";
+
+    const pct = (typeof d.pct === "number") ? clamp(0,100,d.pct) : null;
+    if (pct !== null){
+      el.querySelector(".bar").style.display = "";
+      el.querySelector(".barFill").style.width = pct + "%";
+    }
+    tilesWrap.appendChild(el);
+  }
+}
+
+// ---------------- Apps / Jobs ----------------
+function appStatusPill(app){
+  if (!app.installed) return `<span class="pill warn">не установлено</span>`;
+  return app.running ? `<span class="pill ok">работает</span>` : `<span class="pill warn">остановлено</span>`;
+}
+
+function applyAppsFilter(){
+  const q = (globalSearch.value || "").trim().toLowerCase();
+  if (!q){
+    state.appsView = [...state.appsAll];
+    return;
+  }
+  state.appsView = state.appsAll.filter(a => (`${a.title} ${a.id} ${(a.tags||[]).join(" ")}`.toLowerCase().includes(q)));
+}
+
+function renderHomeLauncher(){
+  homeLauncher.innerHTML = "";
+  const installed = state.appsAll.filter(a=>a.installed);
+  if (!installed.length){
+    homeLauncher.innerHTML = `<div class="muted">Нет установленных приложений.</div>`;
+    return;
+  }
+  for (const app of installed){
+    const el = document.createElement("div");
+    el.className = "appshot";
+    el.innerHTML = `<div class="appshoticon"></div><div class="appshotlabel"></div>`;
+    const icon = el.querySelector(".appshoticon");
+    const img = document.createElement("img");
+    img.className = "appshotimg";
+    img.src = app.icon_url;
+    img.alt = app.title;
+    icon.appendChild(img);
+    el.querySelector(".appshotlabel").textContent = app.title;
+    el.addEventListener("click", ()=>{
+      if (app.url) window.open(app.url, "_blank", "noreferrer");
+      else openAppDetail(app.id);
+    });
+    homeLauncher.appendChild(el);
+  }
+}
+
+function renderAppsInstalledCards(){
+  appsInstalledCards.innerHTML = "";
+  const installed = state.appsView.filter(a=>a.installed);
+  installedCountPill.textContent = String(state.appsAll.filter(a=>a.installed).length);
+
+  if (!installed.length){
+    appsInstalledCards.innerHTML = `<div class="muted">Ничего не найдено.</div>`;
+    return;
+  }
+
+  for (const app of installed){
+    const el = document.createElement("div");
+    el.className = "appcard";
+    el.innerHTML = `
+      <div class="appHead">
+        <div class="appLeft">
+          <div class="appIcon"><img class="appiconimg" src="${app.icon_url}" alt="${app.title}"></div>
+          <div>
+            <div class="appTitle">${app.title}</div>
+            <div class="appId mono">${app.id}</div>
+          </div>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:8px; align-items:flex-end">
+          ${appStatusPill(app)}
+          <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end">
+            <button class="btn" data-act="toggle">${app.running ? "Остановить":"Запустить"}</button>
+            <button class="btn primary" data-act="open" ${app.url ? "" : "disabled"}>Web UI</button>
+            <button class="btn" data-act="details">Детали</button>
+          </div>
+        </div>
+      </div>
+      <div class="appDesc">${app.desc || ""}</div>
+      <div class="chips">${(app.tags||[]).map(t=>`<span class="pill">${t}</span>`).join("")}</div>
+    `;
+
+    el.addEventListener("click", async (e)=>{
+      const b = e.target.closest("button");
+      if (!b) return;
+      const act = b.dataset.act;
+      if (act === "open"){
+        if (app.url) window.open(app.url, "_blank", "noreferrer");
+        return;
+      }
+      if (act === "details"){
+        openAppDetail(app.id);
+        return;
+      }
+      if (act === "toggle"){
+        await api(`/api/apps/${encodeURIComponent(app.id)}/action`, {method:"POST", json:{action: app.running ? "stop":"start"}});
+        await refreshApps();
+        await refreshJobs();
+        return;
+      }
+    });
+
+    appsInstalledCards.appendChild(el);
+  }
+}
+
+function renderJobs(){
+  jobsCountPill.textContent = String(state.jobs.length);
+  const row = (j)=>{
+    const cls = (j.status==="success") ? "ok" : ((j.status==="running"||j.status==="queued") ? "warn" : "bad");
+    return `
+      <div class="kvrow">
+        <span class="kvk mono">${j.appid}</span>
+        <span class="kvv" style="display:inline-flex; gap:10px; align-items:center; flex-wrap:wrap">
+          <span class="pill ${cls}">${j.action || j.kind}</span>
+          <span class="muted">${j.message || ""}</span>
+        </span>
+      </div>
+    `;
+  };
+  jobsPreview.innerHTML = state.jobs.slice(0,5).map(row).join("") || `<div class="muted">Нет задач.</div>`;
+  jobsFull.innerHTML = state.jobs.map(row).join("") || `<div class="muted">Нет задач.</div>`;
+}
+
+// ---------------- App detail + logs ----------------
+function setAppTab(tab){
+  $$(".tab", appTabs).forEach(t=>t.classList.toggle("active", t.dataset.tab===tab));
+  ["overview","settings","containers","logs"].forEach(x=>{
+    $("#appTab-"+x).classList.toggle("hide", x!==tab);
+  });
+}
+
+async function openAppDetail(appId){
+  const {r, data} = await api(`/api/apps/${encodeURIComponent(appId)}`);
+  if (!r.ok || !data?.ok) return;
+
+  const app = data.app;
+  state.currentAppId = appId;
+
+  appDetailTitle.textContent = app.title || app.id;
+  appDetailSub.textContent = app.id;
+
+  appOpenBtn.disabled = !app.url;
+  appOpenBtn.onclick = ()=>{ if (app.url) window.open(app.url, "_blank", "noreferrer"); };
+
+  appToggleBtn.textContent = app.running ? "Остановить" : "Запустить";
+  appToggleBtn.onclick = async ()=>{
+    await api(`/api/apps/${encodeURIComponent(appId)}/action`, {method:"POST", json:{action: app.running ? "stop":"start"}});
+    await refreshApps();
+    await openAppDetail(appId);
+    await refreshJobs();
+  };
+
+  appRestartBtn.onclick = async ()=>{
+    await api(`/api/apps/${encodeURIComponent(appId)}/action`, {method:"POST", json:{action:"restart"}});
+    await refreshJobs();
+  };
+
+  appRemoveBtn.onclick = async ()=>{
+    await api(`/api/apps/${encodeURIComponent(appId)}/action`, {method:"POST", json:{action:"down"}});
+    showView("apps");
+    await refreshApps();
+    await refreshJobs();
+  };
+
+  appOverviewKv.innerHTML = `
+    <div class="kvrow"><span class="kvk">Статус</span><span class="kvv">${app.running ? `<span class="pill ok">работает</span>` : `<span class="pill warn">остановлено</span>`}</span></div>
+    <div class="kvrow"><span class="kvk">Web UI</span><span class="kvv mono">${app.url || "—"}</span></div>
+  `;
+
+  const env = app.env || {};
+  envTable.innerHTML = Object.keys(env).length
+    ? Object.entries(env).map(([k,v])=>`<tr><td class="mono">${k}</td><td class="mono">${v}</td></tr>`).join("")
+    : `<tr><td class="muted" colspan="2">Нет</td></tr>`;
+
+  const ports = app.ports || [];
+  portsTable.innerHTML = ports.length
+    ? ports.map(p=>`<tr><td class="mono">${p.container}</td><td class="mono">${p.host}</td><td class="mono">${p.proto}</td></tr>`).join("")
+    : `<tr><td class="muted" colspan="3">Нет</td></tr>`;
+
+  const vols = app.volumes || [];
+  volumesTable.innerHTML = vols.length
+    ? vols.map(v=>`<tr><td class="mono">${v.host}</td><td class="mono">${v.container}</td><td class="mono">${v.mode}</td></tr>`).join("")
+    : `<tr><td class="muted" colspan="3">Нет</td></tr>`;
+
+  const containers = app.containers || [];
+  containersList.innerHTML = containers.length
+    ? containers.map(c=>`<div class="kvrow"><span class="kvk mono">${c.name}</span><span class="kvv">${c.status}</span></div>`).join("")
+    : `<div class="muted">Нет контейнеров</div>`;
+
+  containerSelect.innerHTML = "";
+  containers.forEach(c=>{
+    const opt = document.createElement("option");
+    opt.value = c.name;
+    opt.textContent = c.name;
+    containerSelect.appendChild(opt);
+  });
+
+  setAppTab("overview");
+  showView("appdetail");
+  await refreshLogs();
+}
+
+async function refreshLogs(){
+  if (!state.currentAppId) return;
+  const container = containerSelect.value;
+  if (!container) { containerLogPre.textContent = ""; return; }
+  const {r, data} = await api(`/api/apps/${encodeURIComponent(state.currentAppId)}/logs?container=${encodeURIComponent(container)}&tail=400`);
+  if (!r.ok || !data?.ok) { containerLogPre.textContent = ""; return; }
+  containerLogPre.textContent = data.text || "";
+  if (state.logsFollow){
+    const box = containerLogPre.parentElement;
+    box.scrollTop = box.scrollHeight;
+  }
+}
+logsRefreshBtn.addEventListener("click", refreshLogs);
+logsFollowBtn.addEventListener("click", ()=>{
+  state.logsFollow = !state.logsFollow;
+  logsFollowBtn.textContent = state.logsFollow ? "Автопрокрутка: ВКЛ" : "Автопрокрутка: ВЫКЛ";
+});
+containerSelect.addEventListener("change", refreshLogs);
+
+appTabs.addEventListener("click", (e)=>{
+  const t = e.target.closest(".tab");
+  if (!t) return;
+  setAppTab(t.dataset.tab);
+});
+backToAppsBtn.addEventListener("click", ()=>showView("apps"));
+
+// ---------------- Modals ----------------
+openInstallModalBtn.addEventListener("click", ()=>installModalWrap.classList.add("show"));
+installCloseBtn.addEventListener("click", ()=>installModalWrap.classList.remove("show"));
+installModalWrap.addEventListener("click", (e)=>{ if (e.target===installModalWrap) installModalWrap.classList.remove("show"); });
+
+openWidgetsBtnHome.addEventListener("click", ()=>{
+  widgetsModalWrap.classList.add("show");
+  renderPalette(); renderCanvas();
+});
+widgetsCloseBtn.addEventListener("click", ()=>widgetsModalWrap.classList.remove("show"));
+widgetsModalWrap.addEventListener("click", (e)=>{ if (e.target===widgetsModalWrap) widgetsModalWrap.classList.remove("show"); });
+
+widgetsResetBtn.addEventListener("click", ()=>{
+  // сброс = дефолтный набор (как при первом запуске)
+  state.widgets = ["cpu","ram","disk","temp","uptime","net"];
+  state.layout = packLayout(state.widgets.map((k,i)=>({key:k,x:0,y:i,w:(k==="disk"||k==="net")?4:2,h:1})));
+  renderPalette(); renderCanvas(); renderHomeTiles();
+  scheduleWidgetsSave();
+});
+
+catalogSearch.addEventListener("input", renderCatalog);
+globalSearch.addEventListener("input", ()=>{
+  applyAppsFilter();
+  renderAppsInstalledCards();
+  renderCatalog();
+});
+
+// ---------------- Catalog ----------------
+function renderCatalog(){
+  const q = (catalogSearch.value || "").trim().toLowerCase();
+  catalogGrid.innerHTML = "";
+
+  const list = state.appsAll.filter(a=>{
+    const s = `${a.title||""} ${a.id||""} ${(a.tags||[]).join(" ")}`.toLowerCase();
+    return s.includes(q);
+  });
+
+  for (const app of list){
+    const el = document.createElement("div");
+    el.className = "appcard";
+    el.innerHTML = `
+      <div class="appHead">
+        <div class="appLeft">
+          <div class="appIcon"><img class="appiconimg" src="${app.icon_url}" alt="${app.title}"></div>
+          <div>
+            <div class="appTitle">${app.title}</div>
+            <div class="appId mono">${app.id}</div>
+          </div>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:8px; align-items:flex-end">
+          ${app.installed ? `<span class="pill ok">установлено</span>` : `<span class="pill warn">не установлено</span>`}
+          <button class="btn primary" ${app.installed ? "disabled":""} data-act="install">Установить</button>
+        </div>
+      </div>
+      <div class="appDesc">${app.desc || ""}</div>
+      <div class="chips">${(app.tags||[]).map(t=>`<span class="pill">${t}</span>`).join("")}</div>
+    `;
+    el.addEventListener("click", async (e)=>{
+      const b = e.target.closest("button");
+      if (!b) return;
+      if (b.dataset.act === "install"){
+        await api(`/api/apps/${encodeURIComponent(app.id)}/install`, {method:"POST"});
+        await refreshApps();
+        await refreshJobs();
+      }
+    });
+    catalogGrid.appendChild(el);
+  }
+}
+
+// ---------------- Updates UI ----------------
+function setUpdStatus(html){ updStatus.innerHTML = html; }
+function logUpd(line){
+  const t = new Date().toLocaleTimeString("ru-RU");
+  updLog.textContent = (updLog.textContent ? updLog.textContent + "\n" : "") + `[${t}] ${line}`;
+  updLog.parentElement.scrollTop = updLog.parentElement.scrollHeight;
+}
+
+checkUpdBtn.addEventListener("click", async ()=>{
+  setUpdStatus(`<span class="pill warn">проверка...</span>`);
+  doUpdBtn.disabled = true;
+  updLog.textContent = "";
+  logUpd("Запрос на сервер: проверка обновлений...");
+
+  const {r, data} = await api("/api/system/update/check");
+  if (!r.ok || !data?.ok){
+    setUpdStatus(`<span class="pill bad">ошибка</span>`);
+    logUpd("Ошибка проверки.");
+    return;
+  }
+
+  updSupported.textContent = data.supported ? "да" : "нет";
+  updBehind.textContent = (typeof data.behind === "number") ? String(data.behind) : "—";
+
+  if (!data.supported){
+    setUpdStatus(`<span class="pill warn">не поддерживается</span>`);
+    logUpd("Проект не git-репозиторий или git не установлен.");
+    return;
+  }
+
+  if (data.status !== "ok"){
+    setUpdStatus(`<span class="pill warn">${data.status}</span>`);
+    if (data.log) logUpd(data.log);
+    return;
+  }
+
+  if (data.has_update){
+    setUpdStatus(`<span class="pill ok">доступно обновление</span>`);
+    doUpdBtn.disabled = false;
+    logUpd("Есть обновления (git).");
+  } else {
+    setUpdStatus(`<span class="pill ok">актуально</span>`);
+    logUpd("Обновлений нет.");
+  }
+});
+
+doUpdBtn.addEventListener("click", async ()=>{
+  setUpdStatus(`<span class="pill warn">обновление...</span>`);
+  doUpdBtn.disabled = true;
+  checkUpdBtn.disabled = true;
+  logUpd("Запрос на сервер: применить обновление...");
+
+  const {r, data} = await api("/api/system/update/apply", {method:"POST"});
+  checkUpdBtn.disabled = false;
+
+  if (!r.ok || !data?.ok){
+    setUpdStatus(`<span class="pill bad">ошибка</span>`);
+    logUpd("Ошибка обновления.");
+    return;
+  }
+
+  updSupported.textContent = data.supported ? "да" : "нет";
+
+  if (!data.supported){
+    setUpdStatus(`<span class="pill warn">не поддерживается</span>`);
+    logUpd("Проект не git-репозиторий или git не установлен.");
+    return;
+  }
+
+  if (data.status === "updated"){
+    setUpdStatus(`<span class="pill ok">обновлено</span>`);
+    logUpd("git pull выполнен.");
+    if (data.log) logUpd(data.log);
+  } else {
+    setUpdStatus(`<span class="pill warn">${data.status}</span>`);
+    if (data.log) logUpd(data.log);
+  }
+});
+
+// ---------------- System actions ----------------
+backupBtn.addEventListener("click", ()=>{ location.href="/api/system/backup"; });
+savePassBtn.addEventListener("click", async ()=>{
+  const current_password = String(curPass.value || "");
+  const new_password = String(newPass.value || "");
+  const {r, data} = await api("/api/system/password", {method:"POST", json:{current_password, new_password}});
+  if (!r.ok || !data?.ok){
+    alert("Ошибка смены пароля");
+    return;
+  }
+  curPass.value = "";
+  newPass.value = "";
+  alert("Пароль обновлён");
+});
+
+// ---------------- Data refresh ----------------
+async function refreshBootstrap(){
+  const {r, data} = await api("/api/bootstrap");
+  if (!r.ok || !data?.ok) return false;
+
+  state.firstRun = !!data.first_run;
+  state.authed = !!data.authed;
+  state.user = data.user || null;
+  state.theme = data.theme || "dark";
+  state.version = data.version || "";
+  state.dockerpresent = !!data.dockerpresent;
+
+  setTheme(state.theme);
+  dockerPill.textContent = state.dockerpresent ? "OK" : "OFF";
+  dockerOkPill.textContent = state.dockerpresent ? "Docker: OK" : "Docker: OFF";
+  dockerOkPill.className = `pill ${state.dockerpresent ? "ok":"warn"}`;
+  sessionPill.textContent = state.user || "—";
+
+  if (!state.authed){
+    appShell.style.display = "none";
+    loginScreen.style.display = "";
+    setupForm.style.display = state.firstRun ? "" : "none";
+    loginForm.style.display = state.firstRun ? "none" : "";
+    loginSubtitle.textContent = state.firstRun ? "Первый запуск: создание администратора" : "Вход";
+    return true;
+  }
+
+  loginScreen.style.display = "none";
+  appShell.style.display = "";
+  showView("home");
+
+  if (data.widgets_config){
+    state.widgets = data.widgets_config.widgets || [];
+    state.layout = packLayout(data.widgets_config.layout || []);
+  }
+  renderPalette(); renderCanvas(); renderHomeTiles();
+  return true;
+}
+
+async function refreshTiles(){
+  const {r, data} = await api("/api/tiles");
+  if (!r.ok || !data?.ok) return;
+  const map = {};
+  (data.tiles || []).forEach(t => { map[t.id] = t; });
+  state.tilesMap = map;
+  renderHomeTiles();
+}
+
+async function refreshApps(){
+  const {r, data} = await api("/api/apps");
+  if (!r.ok || !data?.ok) return;
+  state.appsAll = data.apps || [];
+  applyAppsFilter();
+  renderHomeLauncher();
+  renderAppsInstalledCards();
+  renderCatalog();
+}
+
+async function refreshJobs(){
+  const {r, data} = await api("/api/jobs?limit=50");
+  if (!r.ok || !data?.ok) return;
+  state.jobs = data.jobs || [];
+  renderJobs();
+}
+
+async function refreshSystemInfo(){
+  const {r, data} = await api("/api/system/info");
+  if (!r.ok || !data?.ok) return;
+  const info = data.info || {};
+  const net = data.net || {};
+  const ips = (net.ips || []).map(x=>`${x.iface}: ${x.ip}`).join("<br>") || "—";
+  sysInfoKv.innerHTML = `
+    <div class="kvrow"><span class="kvk">Версия</span><span class="kvv mono">${info.version || "—"}</span></div>
+    <div class="kvrow"><span class="kvk">Python</span><span class="kvv mono">${info.python || "—"}</span></div>
+    <div class="kvrow"><span class="kvk">OS</span><span class="kvv mono">${info.os || "—"}</span></div>
+    <div class="kvrow"><span class="kvk">Архитектура</span><span class="kvv mono">${info.arch || "—"}</span></div>
+    <div class="kvrow"><span class="kvk">Hostname</span><span class="kvv mono">${net.hostname || "—"}</span></div>
+    <div class="kvrow"><span class="kvk">IP</span><span class="kvv mono">${ips}</span></div>
+  `;
+}
+
+// Login/setup
+loginForm.addEventListener("submit", async (e)=>{
+  e.preventDefault();
+  loginError.style.display = "none";
+  const fd = new FormData(loginForm);
+  const login = String(fd.get("login") || "").trim();
+  const password = String(fd.get("password") || "");
+  const {r, data} = await api("/api/login", {method:"POST", json:{login, password}});
+  if (!r.ok || !data?.ok){
+    loginErrorText.textContent = "Неверный логин или пароль";
+    loginError.style.display = "flex";
+    return;
+  }
+  location.href = "/ui";
+});
+
+setupForm.addEventListener("submit", async (e)=>{
+  e.preventDefault();
+  loginError.style.display = "none";
+  const fd = new FormData(setupForm);
+  const login = String(fd.get("login") || "").trim();
+  const password = String(fd.get("password") || "");
+  const {r, data} = await api("/api/setup", {method:"POST", json:{login, password}});
+  if (!r.ok || !data?.ok){
+    loginErrorText.textContent = "Не удалось создать администратора (проверь длину логина/пароля)";
+    loginError.style.display = "flex";
+    return;
+  }
+  location.href = "/ui";
+});
+
+// Apps refresh button
+appsRefreshBtn.addEventListener("click", refreshApps);
+
+// App tabs
+bindCanvasDrop();
+
+(async function init(){
+  const ok = await refreshBootstrap();
+  if (!ok) return;
+
+  if (state.authed){
+    await refreshTiles();
+    await refreshApps();
+    await refreshJobs();
+    await refreshSystemInfo();
+
+    setInterval(refreshTiles, 3000);
+    setInterval(refreshJobs, 4000);
+    setInterval(()=>{ if (state.currentAppId && !$("#view-appdetail").classList.contains("hide")) refreshLogs(); }, 2500);
+  }
+})();
+</script>
+
+</body>
+</html>
